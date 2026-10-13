@@ -1,0 +1,1 @@
+{"name":"skatefit-motion-lab-backend","private":true,"type":"module","scripts":{"test":"node --test backend/test/*.test.js"}}

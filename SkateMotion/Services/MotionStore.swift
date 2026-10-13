@@ -1,0 +1,276 @@
+import Combine
+import CoreMotion
+import Foundation
+import SwiftUI
+
+/// Main-actor state owned by the UI. Core Motion delivers on a private operation queue.
+/// Raw samples are also sent to the independent cloud collector over cellular.
+@MainActor
+final class MotionStore: ObservableObject {
+    @Published private(set) var isRecording = false
+    @Published var boardSide: HeadphoneSide = .left
+    @Published var cloudSyncEnabled = true
+    @Published private(set) var sessionId = ""
+    @Published private(set) var status = "Ready. Pair AirPods Pro and mount one securely."
+    @Published private(set) var cloudStatus = "Connecting to cloud..."
+    @Published private(set) var pendingCloudBatches = 0
+    @Published private(set) var remoteRulesVersion = 0
+    @Published private(set) var boardSampleCount = 0
+    @Published private(set) var phoneSampleCount = 0
+    @Published private(set) var rejectedHeadphoneCount = 0
+    @Published private(set) var latestPitch: Double?
+    @Published private(set) var calibration = BoardCalibration()
+    @Published private(set) var calibrationPose: CalibrationPose?
+    @Published private(set) var events: [TrickEvent] = []
+    @Published private(set) var exportedFile: URL?
+
+    private let headphone = CMHeadphoneMotionManager()
+    private let phone = CMMotionManager()
+    private let cloud = TelemetryUploader()
+    private var subscriptions = Set<AnyCancellable>()
+    private let queue: OperationQueue = {
+        let q = OperationQueue()
+        q.name = "com.banddude.skatefit.motion"
+        q.maxConcurrentOperationCount = 1
+        return q
+    }()
+
+    private var samples: [MotionSample] = []
+    private var pendingCloudSamples: [MotionSample] = []
+    private var pendingCloudEvents: [TrickEvent] = []
+    private var detector = TrickDetector()
+    private var calibrationGravities: [Vector3] = []
+    private var calibrationStart: TimeInterval?
+    private var lastUIUpdate = 0.0
+    private var isSyntheticDemo = false
+    private let maxSamples = 180_000
+
+    var hasCalibration: Bool { calibration.isPhysicallyPlausible }
+    var headphoneAvailable: Bool { headphone.isDeviceMotionAvailable }
+    var phoneAvailable: Bool { phone.isDeviceMotionAvailable }
+    var liveDashboardURL: URL { TelemetryUploader.dashboardURL }
+
+    init() {
+        cloud.$status.sink { [weak self] in self?.cloudStatus = $0 }
+            .store(in: &subscriptions)
+        cloud.$queuedBatchCount.sink { [weak self] in self?.pendingCloudBatches = $0 }
+            .store(in: &subscriptions)
+        cloud.$rulesVersion.sink { [weak self] in self?.remoteRulesVersion = $0 }
+            .store(in: &subscriptions)
+        cloud.onRulesChanged = { [weak self] rules in
+            guard let self else { return }
+            self.detector.rules = rules
+            self.detector.reset()
+        }
+        cloud.startSync()
+    }
+
+    func startRecording() {
+        guard !isRecording else { return }
+        resetSession()
+        calibration = BoardCalibration()
+        sessionId = UUID().uuidString
+        isRecording = true
+        UIApplication.shared.isIdleTimerDisabled = true
+        phone.deviceMotionUpdateInterval = 1.0 / 100.0
+
+        if phone.isDeviceMotionAvailable {
+            phone.startDeviceMotionUpdates(to: queue) { [weak self] motion, error in
+                let uptime = ProcessInfo.processInfo.systemUptime
+                Task { @MainActor [weak self] in
+                    guard let self, let motion else {
+                        if let error { self?.status = "Phone motion: \(error.localizedDescription)" }
+                        return
+                    }
+                    self.receive(MotionSample(motion: motion, source: .phone, receivedAt: uptime))
+                }
+            }
+        }
+        if headphone.isDeviceMotionAvailable {
+            headphone.startDeviceMotionUpdates(to: queue) { [weak self] motion, error in
+                let uptime = ProcessInfo.processInfo.systemUptime
+                Task { @MainActor [weak self] in
+                    guard let self, let motion else {
+                        if let error { self?.status = "AirPods motion: \(error.localizedDescription)" }
+                        return
+                    }
+                    self.receive(MotionSample(motion: motion, source: .headphone, receivedAt: uptime))
+                }
+            }
+        }
+        if headphone.isDeviceMotionAvailable {
+            status = "Recording iPhone and AirPods. Board AirPod: \(boardSide.title)."
+        } else {
+            status = phone.isDeviceMotionAvailable
+                ? "Recording phone only. AirPods motion unavailable; pair compatible AirPods and restart."
+                : "No motion sensors available. Use a physical iPhone, not the simulator."
+        }
+    }
+
+    func stopRecording() {
+        guard isRecording else { return }
+        headphone.stopDeviceMotionUpdates()
+        phone.stopDeviceMotionUpdates()
+        isRecording = false
+        UIApplication.shared.isIdleTimerDisabled = false
+        calibrationPose = nil
+        calibrationStart = nil
+        calibrationGravities.removeAll()
+        stagePendingTelemetry()
+        isSyntheticDemo = false
+        do {
+            exportedFile = try exportCSV()
+            status = "Saved \(samples.count) rows and \(events.count) possible events. Share CSV below."
+        } catch {
+            status = "Stopped, but export failed: \(error.localizedDescription)"
+        }
+    }
+
+    func calibrate(_ pose: CalibrationPose) {
+        guard isRecording else {
+            status = "Start recording before calibrating."
+            return
+        }
+        calibrationPose = pose
+        calibrationStart = nil
+        calibrationGravities = []
+        status = "Hold \(pose.rawValue.lowercased()) steady for about 1.5 seconds."
+    }
+
+    func forceCloudSync() {
+        cloud.startSync()
+        Task { await cloud.refreshRules() }
+    }
+
+    private func stagePendingTelemetry() {
+        guard !isSyntheticDemo else {
+            pendingCloudSamples.removeAll()
+            pendingCloudEvents.removeAll()
+            return
+        }
+        // Opting out of cellular upload still permits local CSV capture.
+        guard cloudSyncEnabled, !sessionId.isEmpty else { return }
+        while !pendingCloudSamples.isEmpty || !pendingCloudEvents.isEmpty {
+            let sampleCount = min(120, pendingCloudSamples.count)
+            let eventCount = min(25, pendingCloudEvents.count)
+            let chunk = Array(pendingCloudSamples.prefix(sampleCount))
+            let taggedEvents = Array(pendingCloudEvents.prefix(eventCount))
+            let saved = cloud.enqueue(sessionId: sessionId, boardSide: boardSide,
+                                      samples: chunk, events: taggedEvents,
+                                      calibration: calibration)
+            if !saved { return }
+            pendingCloudSamples.removeFirst(sampleCount)
+            pendingCloudEvents.removeFirst(eventCount)
+        }
+    }
+
+    private func receive(_ sample: MotionSample) {
+        guard isRecording else { return }
+        if samples.count >= maxSamples {
+            stopRecording()
+            status = "Recording stopped at \(maxSamples) samples to protect memory. Export and start another session."
+            return
+        }
+        samples.append(sample)
+        if !isSyntheticDemo && cloudSyncEnabled {
+            pendingCloudSamples.append(sample)
+            if pendingCloudSamples.count >= 120 { stagePendingTelemetry() }
+        }
+
+        if sample.source == .phone {
+            phoneSampleCount += 1
+            return
+        }
+        // The currently streaming AirPod could be the ear-worn one.
+        // Record all sources for diagnostics, but do not classify the wrong one.
+        if sample.source == .headphone && sample.sensorLocation != boardSide.rawValue {
+            rejectedHeadphoneCount += 1
+            if sample.hostUptime - lastUIUpdate > 0.5 {
+                status = "Motion source is \(sample.sensorLocation), but \(boardSide.rawValue) is mounted. Ignoring for classification."
+                lastUIUpdate = sample.hostUptime
+            }
+            return
+        }
+        boardSampleCount += 1
+
+        if let pose = calibrationPose {
+            if calibrationStart == nil { calibrationStart = sample.hostUptime }
+            calibrationGravities.append(sample.gravity)
+            if let start = calibrationStart, sample.hostUptime - start >= 1.5 {
+                let total = calibrationGravities.reduce(Vector3.zero, +)
+                let mean = total * (1.0 / Double(calibrationGravities.count))
+                calibration.set(pose, gravity: mean)
+                calibrationPose = nil
+                calibrationStart = nil
+                calibrationGravities = []
+                detector.reset()
+                status = calibration.isComplete && !calibration.isPhysicallyPlausible
+                    ? "Pose references conflict. Recalibrate all three with a rigid mount."
+                    : "Saved \(pose.rawValue). \(calibration.poses.count)/3 positions captured."
+            }
+        } else if calibration.isPhysicallyPlausible {
+            let detected = detector.accept(sample, calibration: calibration)
+            events.append(contentsOf: detected)
+            pendingCloudEvents.append(contentsOf: detected)
+        }
+
+        if sample.hostUptime - lastUIUpdate > 0.15 {
+            latestPitch = calibration.pitchDegrees(gravity: sample.gravity)
+            lastUIUpdate = sample.hostUptime
+        }
+    }
+
+    private func resetSession() {
+        samples.removeAll(keepingCapacity: true)
+        pendingCloudSamples.removeAll(keepingCapacity: true)
+        pendingCloudEvents.removeAll(keepingCapacity: true)
+        events = []
+        detector.reset()
+        boardSampleCount = 0
+        phoneSampleCount = 0
+        rejectedHeadphoneCount = 0
+        latestPitch = nil
+        exportedFile = nil
+        lastUIUpdate = 0
+        isSyntheticDemo = false
+    }
+
+    private func exportCSV() throws -> URL {
+        let stamp = Int(Date().timeIntervalSince1970)
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SkateFit-motion-\(stamp).csv")
+        let content = ([MotionSample.csvHeader] + samples.map(\.csvRow))
+            .joined(separator: "\n") + "\n"
+        try content.write(to: file, atomically: true, encoding: .utf8)
+        return file
+    }
+
+    /// Tests UI and classification with generated values. Never uploads demo readings.
+    func runSyntheticManualDemo() {
+        guard !isRecording else { return }
+        resetSession()
+        sessionId = "SYNTHETIC-OFFLINE"
+        isSyntheticDemo = true
+        calibration = BoardCalibration()
+        let tilt = 0.46
+        calibration.set(.wheelsDown, gravity: Vector3(x: 0, y: 0, z: -1))
+        calibration.set(.tailContact,
+                        gravity: Vector3(x: sin(tilt), y: 0, z: -cos(tilt)))
+        calibration.set(.noseContact,
+                        gravity: Vector3(x: -sin(tilt), y: 0, z: -cos(tilt)))
+        isRecording = true
+        let uptime = ProcessInfo.processInfo.systemUptime
+        for index in 0..<140 {
+            let t = Double(index) * 0.025
+            let angle = (index >= 20 && index < 100) ? 0.2 : 0.0
+            let g = Vector3(x: sin(angle), y: 0, z: -cos(angle))
+            let sample = MotionSample(
+                source: .simulation, sensorLocation: boardSide.rawValue,
+                hostUptime: uptime + t, deviceTimestamp: t,
+                gravity: g, acceleration: .zero, rotationRate: .zero)
+            receive(sample)
+        }
+        stopRecording()
+        status = "SYNTHETIC DATA ONLY. No cloud upload. Real sensor testing still required."
+    }
+}

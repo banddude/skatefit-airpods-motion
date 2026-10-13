@@ -1,0 +1,12 @@
+# Generated Xcode project / build output
+SkateMotion.xcodeproj/
+DerivedData/
+build/
+*.xcuserstate
+*.xcuserdata/
+.DS_Store
+.swiftpm/
+# Local sensor captures (may contain location/behavior metadata)
+*.csv
+*.jsonl
+captures/

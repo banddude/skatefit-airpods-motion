@@ -1,0 +1,10 @@
+name = "skatefit-motion-lab"
+main = "backend/src/worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+account_id = "8e83fee9ba5b2bf423d5ffddaaee74c6"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "skatefit-motion-lab"
+database_id = "046a6df8-1550-4c82-8d4d-ef3f0d647fe6"
