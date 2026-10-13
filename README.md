@@ -16,7 +16,7 @@ This is a **working SwiftUI prototype** plus a **Cloudflare Worker / D1 telemetr
 - Experimental candidate flip, shove, combination, and ollie/pop detection.
 - Local CSV export and remote live session viewing.
 - Over-cellular uploads to Cloudflare with a persistent, disk-backed queue for service interruptions.
-- Web console to tune numeric detector thresholds, label ground truth, replay raw session data and download all stored readings.
+- Web console with separate board acceleration, board pitch, board rotation and phone acceleration graphs, live numeric threshold tuning, ground-truth labels, event replay and full raw CSV export.
 - Remote rule updates fetched by the iPhone approximately every 15 seconds while the app is active.
 
 **Not verified:** real off-ear AirPods tracking, accuracy at skateboard impacts, trick identification or whether a trick was actually landed. The app and server distinguish candidates from observations.

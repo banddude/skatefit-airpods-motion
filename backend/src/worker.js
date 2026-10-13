@@ -151,13 +151,24 @@ async function csvExport(db,id){
 async function handle(request,env) {
   const u=new URL(request.url),path=u.pathname,method=request.method;
   if(method==="OPTIONS")return new Response(null,{status:204});
+  if(method==="HEAD"&&(path==="/"||path==="/health")){
+    return new Response(null,{status:200,headers:{
+      "content-type":path==="/"?"text/html; charset=utf-8":"application/json; charset=utf-8"
+    }});
+  }
   if(method==="GET"&&path==="/")return new Response(dashboard,{
     headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}
   });
   if(method==="GET"&&path==="/health")return json({ok:true,service:"SkateFit Motion Lab",at:new Date().toISOString()});
   if(method==="GET"&&path==="/api/config")return json({ok:true,...await config(env.DB)});
   if(method==="PUT"&&path==="/api/config"){
-    const body=await readBody(request),rules=validateRules(body.rules);
+    const body=await readBody(request);
+    if(!body.rules||typeof body.rules!=="object"||Array.isArray(body.rules)){
+      return failure("rules must be an object.");
+    }
+    // Partial remote patches preserve other custom tuning values.
+    const current=(await config(env.DB)).rules;
+    const rules=validateRules({...current,...body.rules});
     await env.DB.prepare("UPDATE settings SET version=version+1,rules_json=?,updated_at=CURRENT_TIMESTAMP WHERE id=1")
       .bind(JSON.stringify(rules)).run();
     return json({ok:true,...await config(env.DB)});
