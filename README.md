@@ -6,6 +6,8 @@ This is a **working SwiftUI prototype** plus a **Cloudflare Worker / D1 telemetr
 
 **Live dashboard:** https://skatefit-motion-lab.mikejshaffer.workers.dev
 
+**Remote diagnostics, API examples and calibration troubleshooting:** [Remote Debugging Guide](docs/REMOTE_DEBUGGING.md).
+
 ## Features implemented
 
 - Simultaneous motion sampling from the AirPods with `CMHeadphoneMotionManager` and iPhone with `CMMotionManager`.
