@@ -108,8 +108,8 @@ struct BoardSensorHealth {
                 }
             }
 
-            if hostDelta >= 0.25 { snapshot.interruptions += 1 }
-            if interval > 0 && interval <= 0.20 && hostDelta <= 0.25 {
+            if hostDelta > 0.20 { snapshot.interruptions += 1 }
+            if interval > 0 && interval <= 0.20 && hostDelta <= 0.20 {
                 let hz = min(240.0, 1.0 / interval)
                 snapshot.sampleRateHz = snapshot.sampleRateHz == 0
                     ? hz : snapshot.sampleRateHz * 0.88 + hz * 0.12

@@ -138,7 +138,7 @@ struct ManualBalanceTracker {
         var interval = 0.0
         if let lastHost = lastHostUptime {
             let arrivalInterval = t - lastHost
-            if arrivalInterval <= 0 || arrivalInterval > 0.30 {
+            if arrivalInterval <= 0 || arrivalInterval > 0.20 {
                 settle(.sensorGap)
             } else if sample.deviceTimestamp > 0,
                       let previous = lastDeviceTimestamp, previous > 0 {

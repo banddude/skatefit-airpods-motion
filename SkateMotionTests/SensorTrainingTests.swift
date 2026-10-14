@@ -144,6 +144,22 @@ final class ManualTrainingIntegrityTests: XCTestCase {
         XCTAssertEqual(tracker.attempts[0].endedBy, .sensorGap)
     }
 
+    func testBluetoothCallbackGapDoesNotBridgeAnOtherwiseRegularDeviceClock() {
+        var tracker = ManualBalanceTracker()
+        for i in 0..<23 {
+            feed(&tracker, at: 70 + Double(i) * 0.025,
+                 sensorTimestamp: 170 + Double(i) * 0.025)
+        }
+        let previous = tracker.snapshot.longestManualSeconds
+        // Device timestamps could look continuous despite delayed Bluetooth
+        // deliveries. Conservative host-arrival gap ends the scored hold.
+        feed(&tracker, at: 70.85, sensorTimestamp: 170.575)
+        XCTAssertEqual(tracker.snapshot.currentHoldSeconds, 0)
+        XCTAssertEqual(tracker.snapshot.longestManualSeconds, previous,
+                       accuracy: 0.0001)
+        XCTAssertEqual(tracker.snapshot.lastCompletedHold?.endedBy, .sensorGap)
+    }
+
     func testDuplicatedDeviceTimestampDoesNotExtendManualTime() {
         var tracker = ManualBalanceTracker()
         for i in 0..<20 {
