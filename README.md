@@ -6,6 +6,16 @@ This is a **working SwiftUI prototype** plus a **Cloudflare Worker / D1 telemetr
 
 **Live dashboard:** https://skatefit-motion-lab.mikejshaffer.workers.dev
 
+**Latest iPhone beta (build 5):** https://skatefit-motion-lab.mikejshaffer.workers.dev/install
+
+Build 5 fixes a mismatch found in live telemetry: actual **right** AirPod
+motion was being discarded because the recorder defaulted to **left**.
+During initial connection, the app now follows the active earbud (if no
+board motion/calibration has been accepted yet) and remembers the chosen
+side across sessions. Once calibration is underway, it will not silently
+switch sensors.
+
+
 **Install latest iPhone beta (build 4):**
 https://skatefit-motion-lab.mikejshaffer.workers.dev/install
 

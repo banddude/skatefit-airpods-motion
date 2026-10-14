@@ -13,7 +13,7 @@ The public page serves an Apple OTA installation manifest, and a Cloudflare Work
 - Two provisioning profiles are installed: `SkateFit Motion Lab App Store Login` and `SkateFit Motion Lab Ad Hoc Login`.
 - Both are registered through App Store Connect API and correspond to the app's bundle identifier.
 - The Ad Hoc profile includes the intended test iPhone. Do not commit profiles or signed IPAs to Git.
-- Cloudflare bucket `skatefit-motion-betas` holds `ios/SkateFitMotionLab-0.1.0-4.ipa` and `ios/SkateFitMotionLab-icon.png`.
+- Cloudflare bucket `skatefit-motion-betas` holds `ios/SkateFitMotionLab-0.1.0-5.ipa` and `ios/SkateFitMotionLab-icon.png`.
 - Worker exposes `/install`, `/beta/manifest.plist`, `/beta/SkateFitMotionLab.ipa`, and `/beta/icon.png`.
 
 ## Rebuilding without Apple web login
@@ -65,7 +65,7 @@ Verify the exported IPA by extracting it, checking that `codesign --verify --dee
 
 ```bash
 wrangler r2 object put \
-  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-4.ipa \
+  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-5.ipa \
   --file /tmp/skatefit-motion-beta-export/SkateMotion.ipa \
   --remote --content-type application/octet-stream
 
@@ -156,3 +156,23 @@ The main screen is now built for riding instead of debugging. It contains:
 This build changes the signed iOS app but does not change the telemetry
 server API or data schema. Install over the previous beta via the same
 /install page. The production SkateFit app is unaffected.
+
+
+## Beta build 5: automatically select the active board AirPod
+
+Real-session telemetry demonstrated the calibration button bug: the app
+persistently assumed **Left** was the mounted earbud, while iOS supplied
+**Right** AirPod readings. Thousands of headphone samples were mistakenly
+excluded from board input, leaving calibration disabled despite the AirPod
+being connected.
+
+Build 5 remembers the selected board-mounted earbud and safely adopts the
+first actively streaming AirPod when no board samples or calibration poses
+have been captured in the current recording. A right-side stream now
+automatically switches from the original left default to **Right**, and
+subsequent readings become eligible for calibration immediately.
+
+Once calibration has started or board samples were already accepted, an
+unexpected side change is not silently adopted. For tests with both buds
+active, confirm that the active stream belongs to the AirPod on the deck.
+No hardware or telemetry server changes are needed.

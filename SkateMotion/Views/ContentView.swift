@@ -63,7 +63,7 @@ struct ContentView: View {
                 .foregroundStyle(store.boardSensorReady ? Color.green : Color.orange)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(store.boardSensorReady ? "Board sensor connected" :
+                Text(store.boardSensorReady ? "\(store.boardSide.title) AirPod connected" :
                         (store.isRecording ? "Waiting for board sensor" : "Board sensor"))
                     .font(.headline)
                 Text(store.boardSensorReady ?

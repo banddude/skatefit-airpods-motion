@@ -16,12 +16,32 @@ enum BoardSensorReadiness {
     }
 }
 
+/// Only adopt a newly observed earbud when we have no board readings or
+/// calibration. Otherwise a source switch might silently corrupt a run.
+enum BoardSensorSelection {
+    static func shouldAutoSelect(detectedSide: String, selectedSide: String,
+                                 boardReadings: Int, calibrationStarted: Bool,
+                                 hasSavedPose: Bool) -> Bool {
+        guard ["left", "right"].contains(detectedSide),
+              detectedSide != selectedSide,
+              boardReadings == 0,
+              !calibrationStarted,
+              !hasSavedPose else { return false }
+        return true
+    }
+}
+
 /// Main-actor state owned by the UI. Core Motion delivers on a private operation queue.
 /// Raw samples are also sent to the independent cloud collector over cellular.
 @MainActor
 final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDelegate {
     @Published private(set) var isRecording = false
-    @Published var boardSide: HeadphoneSide = .left
+    private static let boardSideKey = "skatefitMotionLab.boardMountedAirPodSide"
+    @Published var boardSide: HeadphoneSide = .left {
+        didSet {
+            UserDefaults.standard.set(boardSide.rawValue, forKey: Self.boardSideKey)
+        }
+    }
     @Published var cloudSyncEnabled = true
     @Published private(set) var sessionId = ""
     @Published private(set) var status = "Ready. Pair AirPods Pro and mount one securely."
@@ -90,6 +110,10 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
 
     override init() {
         super.init()
+        if let saved = UserDefaults.standard.string(forKey: Self.boardSideKey),
+           let savedSide = HeadphoneSide(rawValue: saved) {
+            boardSide = savedSide
+        }
         headphone.delegate = self
         updateHeadphonePermission()
         refreshAudioOutput()
@@ -378,6 +402,20 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
             headphoneStreamActive = true
             if headphoneTotalSamples == 1 || headphoneTotalSamples % 10 == 0 {
                 headphoneStatus = "Receiving AirPod \(sample.sensorLocation) motion. \(headphoneTotalSamples) readings."
+            }
+        }
+        if sample.source == .headphone && BoardSensorSelection.shouldAutoSelect(
+            detectedSide: sample.sensorLocation,
+            selectedSide: boardSide.rawValue,
+            boardReadings: boardSampleCount,
+            calibrationStarted: calibrationPose != nil,
+            hasSavedPose: !calibration.poses.isEmpty) {
+            // With one AirPod mounted and the other in its case, the active
+            // headphone is the board sensor. Match the actual earbud, not
+            // the hard-coded Left default, and remember it next session.
+            if let detected = HeadphoneSide(rawValue: sample.sensorLocation) {
+                boardSide = detected
+                status = "Detected \(detected.title) AirPod motion. Ready to calibrate."
             }
         }
         if sample.source == .headphone && sample.sensorLocation != boardSide.rawValue {

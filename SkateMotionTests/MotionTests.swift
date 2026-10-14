@@ -35,6 +35,30 @@ final class MotionTests: XCTestCase {
         XCTAssertEqual(degrees, 0, accuracy: 0.05)
     }
 
+    func testBoardSideAutomaticallyFollowsStreamingEarbudAtSetup() {
+        XCTAssertTrue(BoardSensorSelection.shouldAutoSelect(
+            detectedSide: "right", selectedSide: "left",
+            boardReadings: 0, calibrationStarted: false, hasSavedPose: false))
+        XCTAssertTrue(BoardSensorSelection.shouldAutoSelect(
+            detectedSide: "left", selectedSide: "right",
+            boardReadings: 0, calibrationStarted: false, hasSavedPose: false))
+        XCTAssertFalse(BoardSensorSelection.shouldAutoSelect(
+            detectedSide: "right", selectedSide: "right",
+            boardReadings: 0, calibrationStarted: false, hasSavedPose: false))
+        XCTAssertFalse(BoardSensorSelection.shouldAutoSelect(
+            detectedSide: "default", selectedSide: "left",
+            boardReadings: 0, calibrationStarted: false, hasSavedPose: false))
+        XCTAssertFalse(BoardSensorSelection.shouldAutoSelect(
+            detectedSide: "right", selectedSide: "left",
+            boardReadings: 5, calibrationStarted: false, hasSavedPose: false))
+        XCTAssertFalse(BoardSensorSelection.shouldAutoSelect(
+            detectedSide: "right", selectedSide: "left",
+            boardReadings: 0, calibrationStarted: true, hasSavedPose: false))
+        XCTAssertFalse(BoardSensorSelection.shouldAutoSelect(
+            detectedSide: "right", selectedSide: "left",
+            boardReadings: 0, calibrationStarted: false, hasSavedPose: true))
+    }
+
     func testCalibrationRequiresRealBoardAirPodSamples() {
         XCTAssertFalse(BoardSensorReadiness.canCalibrate(
             boardReadings: 0, detectedSide: "none", expectedSide: "left",

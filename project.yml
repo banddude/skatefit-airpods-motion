@@ -22,7 +22,7 @@ targets:
       properties:
         CFBundleDisplayName: SkateFit Motion Lab
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "4"
+        CFBundleVersion: "5"
         NSMotionUsageDescription: "SkateFit Motion Lab records iPhone and AirPods motion to research skateboard tricks, manuals, and landings."
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
