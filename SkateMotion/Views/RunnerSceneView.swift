@@ -7,6 +7,9 @@ struct RunnerSceneView: View {
     let deckColor: Color
     let reduceMotion: Bool
     let highContrast: Bool
+    /// Only populated by live calibrated AirPod motion. Mirrors the real
+    /// nose/tail tilt on the game's own board, not just the diagnostics view.
+    var livePitchDegrees: Double? = nil
 
     private var theme: (Color, Color, Color) {
         switch engine.course.worldNumber {
@@ -191,7 +194,12 @@ struct RunnerSceneView: View {
         if engine.invulnerabilityTime == 0 ||
            Int(engine.elapsed * 12).isMultiple(of: 2) {
             let deckY = heroY + (engine.crouching ? 6 : 0)
-            let tilt: CGFloat = engine.manualing && engine.height < 0.2 ? -7 : 0
+            let tilt: CGFloat = {
+                if let pitch = livePitchDegrees, pitch.isFinite {
+                    return -CGFloat(max(-32, min(32, pitch))) * 0.65
+                }
+                return engine.manualing && engine.height < 0.2 ? -7 : 0
+            }()
             let deckPath = Path { path in
                 path.move(to: CGPoint(x: playerX - 21, y: deckY + 6))
                 path.addLine(to: CGPoint(x: playerX + 30, y: deckY + 6 + tilt))
