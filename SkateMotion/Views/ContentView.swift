@@ -106,6 +106,7 @@ struct ContentView: View {
                 Text("\(store.liveStatistics.possibleEvents)")
                     .font(.title2.bold()).monospacedDigit()
             }.padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+            SkateGameCard(sessions: store.savedSessions, current: store.liveStatistics, recording: store.isRecording)
             savedSessionsButton
             Button("Board settings & calibration") { gameMode = false }
                 .font(.subheadline)
