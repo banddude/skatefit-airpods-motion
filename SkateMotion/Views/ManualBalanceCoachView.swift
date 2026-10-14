@@ -141,7 +141,8 @@ struct ManualBalanceCoachView: View {
                         .font(.system(size: 44, weight: .black, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(accent)
-                    Text(practice.pitchDegrees >= 0 ? "NOSE UP" : "TAIL UP")
+                    Text(practice.isInverted ? "DECK INVERTED" :
+                         practice.pitchDegrees >= 0 ? "NOSE UP" : "TAIL UP")
                         .font(.caption2.weight(.bold)).tracking(1.4)
                 }
                 Spacer()
@@ -330,6 +331,11 @@ struct ManualBalanceCoachView: View {
                 }
                 if let uncertainty = gps.horizontalAccuracyMeters {
                     Text(String(format: "Horizontal location uncertainty radius: %.0f m", uncertainty))
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                if let speedAccuracy = gps.speedAccuracyMetersPerSecond {
+                    Text(String(format: "Speed accuracy estimate: ±%.1f mph", speedAccuracy * 2.2369362921))
                         .font(.caption2)
                         .foregroundStyle(.white.opacity(0.6))
                 }
