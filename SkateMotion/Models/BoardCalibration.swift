@@ -15,9 +15,25 @@ struct BoardOrientation: Codable, Equatable {
     let rollDegrees: Double
     let yawDegrees: Double
     let headingAvailable: Bool
+    /// Quaternion in calibrated board coordinates, including complete flips.
+    /// This is orientation only, not a 3D position or absolute compass heading.
+    let relativeQuaternion: Quaternion4?
+    /// +1 is wheels-down, -1 is grip-side-down, 0 is deck on its edge.
+    let upAlignment: Double
+    /// True when original fused attitude remains available.
+    let fullAttitudeAvailable: Bool
+
+    var isInverted: Bool { upAlignment < -0.55 }
+    var isOnEdge: Bool { abs(upAlignment) < 0.45 }
+    var deckFace: String {
+        if isInverted { return "Grip facing down" }
+        if isOnEdge { return "On edge" }
+        return "Wheels facing down"
+    }
 
     static let zero = BoardOrientation(
-        pitchDegrees: 0, rollDegrees: 0, yawDegrees: 0, headingAvailable: false)
+        pitchDegrees: 0, rollDegrees: 0, yawDegrees: 0, headingAvailable: false,
+        relativeQuaternion: .identity, upAlignment: 1, fullAttitudeAvailable: false)
 }
 
 /// Gravity references define board longitudinal axis despite arbitrary AirPod orientation.
@@ -83,7 +99,8 @@ struct BoardCalibration {
         var yaw = 0.0
         var headingAvailable = false
 
-        if let reference = flatAttitude, let current = sample.quaternion {
+        if let reference = flatAttitude, reference.isValid,
+           let current = sample.quaternion, current.isValid {
             let initialLongitudinal = reference.rotate(length)
             let initialLateral = reference.rotate(width)
             let currentLongitudinal = current.rotate(length)
@@ -94,8 +111,21 @@ struct BoardCalibration {
                 headingAvailable = true
             }
         }
+        let relative = flatAttitude.flatMap { reference in
+            sample.quaternion.flatMap { current in
+                BoardPoseMath.relativeRotation(reference: reference, current: current,
+                                               length: length, width: width, down: flat)
+            }
+        }
+        let gravityRotation = BoardPoseMath.gravityOnlyRotation(
+            measuredGravity: sample.gravity, length: length, width: width,
+            flatDown: flat)
+        let upAlignment = max(-1, min(1, measured.dot(flat)))
         return BoardOrientation(pitchDegrees: pitch, rollDegrees: roll,
-                                yawDegrees: yaw, headingAvailable: headingAvailable)
+                                yawDegrees: yaw, headingAvailable: headingAvailable,
+                                relativeQuaternion: relative ?? gravityRotation,
+                                upAlignment: upAlignment,
+                                fullAttitudeAvailable: relative != nil)
     }
 
     var contactTiltDegrees: Double? {

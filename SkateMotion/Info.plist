@@ -20,6 +20,8 @@
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
 	<string>12</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Optionally show outdoor travel speed from this iPhone during manual practice. No GPS coordinates are stored or uploaded.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>SkateFit Motion Lab records iPhone and AirPods motion to research skateboard tricks, manuals, and landings.</string>
 	<key>UILaunchScreen</key>

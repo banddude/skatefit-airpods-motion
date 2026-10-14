@@ -73,6 +73,17 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     /// diagnostics UI update cadence. Never substitutes phone motion.
     @Published private(set) var gamePitch: Double?
     @Published private(set) var latestOrientation: BoardOrientation?
+    @Published private(set) var balance = ManualBalanceSnapshot()
+    @Published private(set) var savedManualPractices: [SavedManualPractice] = []
+    @Published var balanceSettings: ManualBalanceSettings = .init() {
+        didSet {
+            balanceSettings = balanceSettings.validated
+            tracker.configure(balanceSettings)
+            if let data = try? JSONEncoder().encode(balanceSettings) {
+                UserDefaults.standard.set(data, forKey: Self.balanceSettingsKey)
+            }
+        }
+    }
     @Published private(set) var latestBoardAcceleration: Vector3?
     @Published private(set) var latestBoardRotationRate: Vector3?
     @Published private(set) var liveStatistics = SessionStatistics()
@@ -87,6 +98,10 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     private let phone = CMMotionManager()
     private let cloud = TelemetryUploader()
     private let archive = SessionArchive()
+    private let balanceHistory = ManualPracticeHistory()
+    private static let balanceSettingsKey = "skatefitManualBalance.settingsV1"
+    private var tracker = ManualBalanceTracker()
+    private var lastBalanceUIUpdate = 0.0
     private let audioWake = AirPodAudioWake()
     private var subscriptions = Set<AnyCancellable>()
     private let queue: OperationQueue = {
@@ -141,6 +156,12 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     override init() {
         super.init()
         savedSessions = archive.history
+        savedManualPractices = balanceHistory.sessions
+        if let data = UserDefaults.standard.data(forKey: Self.balanceSettingsKey),
+           let saved = try? JSONDecoder().decode(ManualBalanceSettings.self, from: data) {
+            balanceSettings = saved.validated
+        }
+        tracker.configure(balanceSettings)
         if let saved = UserDefaults.standard.string(forKey: Self.boardSideKey),
            let savedSide = HeadphoneSide(rawValue: saved) {
             boardSide = savedSide
@@ -227,6 +248,12 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         calibrationProgress = 0
         calibrationGravities.removeAll()
         stagePendingTelemetry()
+        tracker.finish()
+        balance = tracker.snapshot
+        if !isSyntheticDemo && balance.measuredSamples > 0 {
+            balanceHistory.append(tracker.savedRecord(sessionID: sessionId))
+            savedManualPractices = balanceHistory.sessions
+        }
         do {
             if let summary = try archive.finish(calibrated: calibration.isPhysicallyPlausible) {
                 exportedFile = archive.fileURL(for: summary)
@@ -255,6 +282,9 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         calibrationLastAttitude = nil
         calibrationProgress = 0
         latestPitch = nil
+        tracker.reset()
+        balance = tracker.snapshot
+        lastBalanceUIUpdate = 0
         gamePitch = nil
         lastGamePitchAt = nil
         latestOrientation = nil
@@ -512,9 +542,20 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
 
         saveSample(sample, isBoard: true, orientation: motionOrientation)
 
+        if calibrationPose == nil && calibration.isPhysicallyPlausible {
+            tracker.accept(sample, orientation: motionOrientation,
+                           calibration: calibration)
+            if sample.hostUptime - lastBalanceUIUpdate >= 1.0 / 15.0 {
+                balance = tracker.snapshot
+                lastBalanceUIUpdate = sample.hostUptime
+            }
+        }
         if calibration.isPhysicallyPlausible && motionOrientation != nil &&
            sample.hostUptime - lastGamePitchUpdate >= 1.0 / 30.0 {
-            gamePitch = motionOrientation?.pitchDegrees
+            // An inverted/edge-on board is not an ordinary manual.
+            gamePitch = (motionOrientation?.upAlignment ?? 0) > 0.45
+                ? motionOrientation?.pitchDegrees : 0
+            latestOrientation = motionOrientation
             lastGamePitchAt = sample.hostUptime
             lastGamePitchUpdate = sample.hostUptime
         }
@@ -557,6 +598,9 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         phoneSampleCount = 0
         rejectedHeadphoneCount = 0
         latestPitch = nil
+        tracker.reset()
+        balance = tracker.snapshot
+        lastBalanceUIUpdate = 0
         gamePitch = nil
         lastGamePitchAt = nil
         latestOrientation = nil
