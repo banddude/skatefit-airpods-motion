@@ -487,7 +487,7 @@ struct ManualRunnerGame: View {
 
                 RunnerSceneView(engine: engine, deckColor: deckColor,
                                 reduceMotion: reduceSceneMotion || systemReduceMotion)
-                    .id(Int(engine.distance * 10))
+
 
                 HStack(spacing: 8) {
                     Image(systemName: engine.eventKind == "damage" ?

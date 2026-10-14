@@ -22,57 +22,61 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                Picker("Screen", selection: $gameMode) {
-                    Text("Play").tag(true)
-                    Text("Motion Lab").tag(false)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-
+            Group {
                 if gameMode {
                     ManualRunnerGame(store: store, openMotionLab: {
                         gameMode = false
                     })
                 } else {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 18) {
-                            connectionBanner
-                            if !store.hasCalibration {
-                                recordingControls
-                                calibrationCard
-                            }
-                            BoardAngleCard(
-                                pitch: store.hasCalibration ? store.latestPitch : nil,
-                                calibrated: store.hasCalibration,
-                                recording: store.isRecording,
-                                manualLimit: store.calibration.manualUpperLimit
-                            )
-                            if store.hasCalibration {
-                                Board3DCard(orientation: store.latestOrientation,
-                                            recording: store.isRecording)
-                                recordingControls
-                                readyCard
-                            }
-                            if store.isRecording || store.exportedFile != nil {
-                                SessionStatisticsCard(stats: store.liveStatistics,
-                                                      recording: store.isRecording)
-                            }
-                            savedSessionsButton
-                            if let latest = store.events.last {
-                                latestEventCard(latest)
-                            }
-                            advancedCard
+                    VStack(spacing: 0) {
+                        Button {
+                            gameMode = true
+                        } label: {
+                            Label("Back to game", systemImage: "chevron.left")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 18)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.teal)
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 18) {
+                                connectionBanner
+                                if !store.hasCalibration {
+                                    recordingControls
+                                    calibrationCard
+                                }
+                                BoardAngleCard(
+                                    pitch: store.hasCalibration ? store.latestPitch : nil,
+                                    calibrated: store.hasCalibration,
+                                    recording: store.isRecording,
+                                    manualLimit: store.calibration.manualUpperLimit
+                                )
+                                if store.hasCalibration {
+                                    Board3DCard(orientation: store.latestOrientation,
+                                                recording: store.isRecording)
+                                    recordingControls
+                                    readyCard
+                                }
+                                if store.isRecording || store.exportedFile != nil {
+                                    SessionStatisticsCard(stats: store.liveStatistics,
+                                                          recording: store.isRecording)
+                                }
+                                savedSessionsButton
+                                if let latest = store.events.last {
+                                    latestEventCard(latest)
+                                }
+                                advancedCard
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 18)
+                        }
                     }
                 }
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("SkateFit")
+            .navigationTitle(gameMode ? "" : "Motion Lab")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(gameMode ? .hidden : .visible, for: .navigationBar)
         }
     }
 
