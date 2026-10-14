@@ -11,7 +11,7 @@ test("iPhone installer exposes a Safari install link", () => {
 
 test("OTA manifest uses the same bundle ID and hosted IPA as the archive", () => {
   assert.match(installManifest, /com\.banddude\.skatefit\.motionlab/);
-  assert.match(installManifest, /<string>13<\/string>/);
+  assert.match(installManifest, /<string>14<\/string>/);
   assert.match(installManifest, /https:\/\/skatefit-motion-lab\.mikejshaffer\.workers\.dev\/beta\/SkateFitMotionLab\.ipa/);
 });
 
@@ -52,7 +52,7 @@ test("signed beta binary and icon stream through R2 over GET and HEAD", async ()
     assert.equal(Number(response.headers.get("content-length")), 4);
     assert.equal((await response.arrayBuffer()).byteLength, method === "GET" ? 4 : 0);
   }
-  assert.deepEqual(calls, ["ios/SkateFitMotionLab-0.1.0-13.ipa", "ios/SkateFitMotionLab-0.1.0-13.ipa"]);
+  assert.deepEqual(calls, ["ios/SkateFitMotionLab-0.1.0-14.ipa", "ios/SkateFitMotionLab-0.1.0-14.ipa"]);
 });
 
 test("iOS partial downloads honor byte ranges and reject invalid requests", async () => {

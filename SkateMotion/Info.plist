@@ -19,7 +19,9 @@
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
-	<string>13</string>
+	<string>14</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Track a printed 120 mm skateboard marker with the rear camera only when you opt in. No video is saved or uploaded.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Optionally show outdoor travel speed from this iPhone during manual practice. No GPS coordinates are stored or uploaded.</string>
 	<key>NSMotionUsageDescription</key>

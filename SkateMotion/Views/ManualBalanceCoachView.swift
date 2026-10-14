@@ -28,6 +28,7 @@ struct ManualBalanceCoachView: View {
                     setupInstructions
                 }
                 trainingGoals
+                opticalBoardSpaceEntry
                 rawSensorDetails
                 locationPanel
                 recentPractice
@@ -256,6 +257,39 @@ struct ManualBalanceCoachView: View {
         }
         .padding(17)
         .background(panel, in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    private var opticalBoardSpaceEntry: some View {
+        NavigationLink {
+            BoardSpaceLabView(store: store)
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "viewfinder")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundStyle(accent)
+                    .frame(width: 55, height: 56)
+                    .background(dark, in: RoundedRectangle(cornerRadius: 12))
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("NEW · EXPERIMENTAL SPATIAL TRACKING")
+                        .font(.system(size: 9, weight: .black))
+                        .foregroundStyle(accent)
+                        .tracking(0.8)
+                    Text("Board Space Camera Lab")
+                        .font(.subheadline.weight(.black))
+                    Text("Optical X/Y/Z marker movement, printed target, and AirPod timing")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.69))
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(accent)
+            }
+            .padding(13)
+            .background(panel, in: RoundedRectangle(cornerRadius: 17))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("openBoardSpaceLab")
     }
 
     private var rawSensorDetails: some View {

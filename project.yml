@@ -22,8 +22,9 @@ targets:
       properties:
         CFBundleDisplayName: SkateFit Motion Lab
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "13"
+        CFBundleVersion: "14"
         NSMotionUsageDescription: "SkateFit records board-mounted AirPod orientation and motion to coach manual balance and research skateboard movement."
+        NSCameraUsageDescription: "Opt in to rear-camera tracking of a known 120 mm printed board marker. The app does not record or upload video."
         NSLocationWhenInUseUsageDescription: "Optional outdoor speed from this iPhone while practicing. GPS coordinates are not saved or uploaded."
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
