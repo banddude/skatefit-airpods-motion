@@ -69,6 +69,9 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     @Published private(set) var audioWakeStatus = "Not yet played."
     @Published private(set) var calibrationProgress: Double = 0
     @Published private(set) var latestPitch: Double?
+    /// Gameplay-only pitch, published at up to 30 Hz rather than the 6 Hz
+    /// diagnostics UI update cadence. Never substitutes phone motion.
+    @Published private(set) var gamePitch: Double?
     @Published private(set) var latestOrientation: BoardOrientation?
     @Published private(set) var latestBoardAcceleration: Vector3?
     @Published private(set) var latestBoardRotationRate: Vector3?
@@ -104,12 +107,19 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     private var monitorTask: Task<Void, Never>?
     private var lastHeadphoneStreamStart: TimeInterval?
     private var lastUIUpdate = 0.0
+    private var lastGamePitchUpdate = 0.0
+    private var lastGamePitchAt: TimeInterval?
     private var lastStatisticsUpdate = 0.0
     private var isSyntheticDemo = false
 
     var hasCalibration: Bool { calibration.isPhysicallyPlausible }
     var headphoneAvailable: Bool { headphone.isDeviceMotionAvailable }
     var phoneAvailable: Bool { phone.isDeviceMotionAvailable }
+    var gameMotionReady: Bool {
+        isRecording && hasCalibration && boardSensorReady && gamePitch != nil &&
+            RunnerMotionFreshness.isReady(lastSample: lastGamePitchAt,
+                                          now: ProcessInfo.processInfo.systemUptime)
+    }
     var liveDashboardURL: URL { TelemetryUploader.dashboardURL }
 
     func savedCSV(for session: SavedSkateSession) -> URL {
@@ -245,6 +255,8 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         calibrationLastAttitude = nil
         calibrationProgress = 0
         latestPitch = nil
+        gamePitch = nil
+        lastGamePitchAt = nil
         latestOrientation = nil
         detector.reset()
         status = "Hold the board in each reference position to recalibrate."
@@ -500,6 +512,12 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
 
         saveSample(sample, isBoard: true, orientation: motionOrientation)
 
+        if calibration.isPhysicallyPlausible && motionOrientation != nil &&
+           sample.hostUptime - lastGamePitchUpdate >= 1.0 / 30.0 {
+            gamePitch = motionOrientation?.pitchDegrees
+            lastGamePitchAt = sample.hostUptime
+            lastGamePitchUpdate = sample.hostUptime
+        }
         if sample.hostUptime - lastUIUpdate > 0.15 {
             latestOrientation = motionOrientation
             latestBoardAcceleration = sample.acceleration
@@ -539,6 +557,8 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         phoneSampleCount = 0
         rejectedHeadphoneCount = 0
         latestPitch = nil
+        gamePitch = nil
+        lastGamePitchAt = nil
         latestOrientation = nil
         latestBoardAcceleration = nil
         latestBoardRotationRate = nil
@@ -547,6 +567,8 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         lastStatisticsUpdate = 0
         exportedFile = nil
         lastUIUpdate = 0
+        lastGamePitchUpdate = 0
+        lastGamePitchAt = nil
         isSyntheticDemo = false
     }
 
