@@ -52,7 +52,7 @@ enum BoardOpticalMath {
         let translation = cameraFromMarker.columns.3
         let position = SIMD3<Double>(
             Double(translation.x), Double(translation.y), Double(translation.z))
-        guard position.allSatisfy(\.isFinite) else { return nil }
+        guard position.x.isFinite, position.y.isFinite, position.z.isFinite else { return nil }
         // Three orientation axes in the camera coordinate frame.
         let rotation = simd_float3x3(columns: (
             SIMD3(cameraFromMarker.columns.0.x, cameraFromMarker.columns.0.y,
