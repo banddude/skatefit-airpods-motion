@@ -1,3 +1,15 @@
+# Manual Runner Beta 12: expanded game and more responsive motion input
+
+**Install beta 12 on the registered test iPhone:** https://skatefit-motion-lab.mikejshaffer.workers.dev/install
+
+The built-in Manual Runner now has **15 playable courses across five themed worlds**, including neon pulse gates, automatic launch ramps, longer chasms, more distinct stage pacing and names, and a Flow Meter that rewards properly held manual/nose-manual balance lines with double-score combos. An on-screen obstacle cue tells you whether to pop, duck, hold a balance line, or ride a ramp. Additional unlockable decks and a three-star completion goal reward repeat play. Existing beta 11 saves and unlocked worlds remain usable.
+
+The board-mounted AirPods controller now uses a separate faster gameplay pitch stream (up to 30 Hz), directional hysteresis, and a 0.75-second freshness watchdog. **Actual AirPods off-ear hardware performance remains unverified**. The game also works completely offline with touch and supported gamepad controls, and public experimental telemetry remains **off by default**.
+
+The project has 15-stage simulation coverage, save-compatibility tests, and Xcode UI smoke tests. Commercial release is still blocked on hardware playtesting, external accessibility/performance testing, legal asset provenance and production distribution/security. See [Release Checklist](docs/RELEASE_CHECKLIST.md).
+
+---
+
 # Manual Runner Beta 11: October 2026
 
 The SkateFit motion prototype now includes a **standalone, offline-first manual/nose-manual platform game**. It is playable with on-screen controls or supported gamepads; calibrated AirPods motion control is optional. There are five authored worlds (the first is approximately 3 minutes), jumps, ducking, manual and nose-manual balance lines, checkpoints, pickups, star ratings, an offline career save with backup recovery, cosmetics, challenges, haptics, and high-contrast/reduced-motion options.

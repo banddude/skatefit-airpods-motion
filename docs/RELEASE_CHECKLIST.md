@@ -4,15 +4,15 @@ Updated 2026-10-13. A successful build or simulator test is not equivalent to a 
 
 ## Verified in source and simulator
 
-- [x] Five world courses with deterministic hazards and completion flags.
+- [x] Fifteen stages across five worlds with deterministic hazards and completion flags.
 - [x] A deterministic 120 Hz simulation, tested with 30/60/120 Hz frame input.
-- [x] All five worlds finish with zero damage and three stars under a scripted timing trace.
+- [x] All fifteen stages finish with zero damage and three stars under a scripted timing trace.
 - [x] Manual / nose manual input, jump buffer, duck, invulnerability, collectibles, combos, checkpoints and retry.
 - [x] Touch controls, optional supported GameController input, and optional calibrated AirPod pitch mode.
 - [x] Motion controller dropout pauses the run; user can continue with touch input.
 - [x] On-device progression, best scores, star unlocks, deck colors and backup recovery.
 - [x] Distinctive procedural night-city scene, UI navigation, haptics, reduced background motion and high contrast.
-- [x] 28 iOS simulator tests (when the latest signed source was last tested) and 13 Node backend tests.
+- [x] 36+ iOS simulator unit tests plus UI navigation tests and 13 Node backend tests.
 - [x] Public prototype sensor uploads disabled by default; users must explicitly opt in.
 
 ## Required before external beta signoff

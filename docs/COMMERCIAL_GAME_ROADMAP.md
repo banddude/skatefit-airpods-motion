@@ -3,6 +3,14 @@
 ## Product promise
 A complete 2.5D platform adventure with a real skateboarding motion controller, optional touch controls, and a polished game that remains fun without an AirPod. Keep the actual game separate from the AirPod diagnostics and motion lab.
 
+## Beta 12 implementation update
+
+- Expanded from one course per world to 15 courses, three per world, retaining beta-11 save identifiers 1...5.
+- World 3+ introduces timed neon pulse gates; world 4+ adds launch ramps and long airborne chasms.
+- Live directional cues, Flow Meter double-score combos from held balance lines, extra unlockable deck colors and stage selection persistence.
+- Board-mounted AirPods controller now uses up to 30 Hz calibrated game pitch instead of ~6 Hz display diagnostics, hysteresis against threshold jitter and a 0.75-second stale sensor watchdog.
+- Added XCUI end-to-end regression tests for entering the game, pause/resume, stage locks and the Motion Lab menu.
+
 ## Current implementation status (October 2026, beta 11)
 
 **Implemented in source:** Five patterned worlds with a 3-minute first course; deterministic 120 Hz physics with buffered jump/coyote time and hazard overlap windows; manual and nose manual balance-line mechanics; checkpoint retry; collectibles, score/combo/stars; 30/60/120 Hz equivalence testing; automated zero-hit, three-star completion traces for every world; offline touch, optional GameController and calibrated AirPod input with sensor-loss pause; a night-city procedural rider scene; Play/Worlds/Goals/Decks/Profile/Settings navigation; optional system sound feedback and haptics; reduced parallax and high-contrast options; offline saved progress with file backup and corruption recovery; cloud telemetry disabled by default.
