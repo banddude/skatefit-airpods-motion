@@ -20,6 +20,7 @@ final class BoardCameraTracker: NSObject, ObservableObject,
     private var referencePose: CameraMarkerPose?
     private var lastPublicationUptime = 0.0
     private var lastOpticalUptime: TimeInterval?
+    private var lastProcessedFrameUptime = 0.0
     private let publishingInterval = 1.0 / 12.0
 
     static var isAvailable: Bool { ARImageTrackingConfiguration.isSupported }
@@ -70,6 +71,7 @@ final class BoardCameraTracker: NSObject, ObservableObject,
         hasZeroReference = false
         lastOpticalUptime = nil
         lastPublicationUptime = 0
+        lastProcessedFrameUptime = 0
         latestSample = nil
         isRunning = true
         session.run(config, options: [.resetTracking, .removeExistingAnchors])
@@ -82,6 +84,7 @@ final class BoardCameraTracker: NSObject, ObservableObject,
         latestSample = nil
         lastOpticalUptime = nil
         lastPublicationUptime = 0
+        lastProcessedFrameUptime = 0
         referencePose = nil
         hasZeroReference = false
         status = "CAMERA OFF"
@@ -122,7 +125,8 @@ final class BoardCameraTracker: NSObject, ObservableObject,
 
     private func accept(pose: CameraMarkerPose, timestamp: TimeInterval,
                         uptime: TimeInterval) {
-        guard isRunning else { return }
+        guard isRunning, uptime >= lastProcessedFrameUptime else { return }
+        lastProcessedFrameUptime = uptime
         lastOpticalUptime = uptime
         guard uptime >= lastPublicationUptime + publishingInterval else { return }
         lastPublicationUptime = uptime
@@ -142,15 +146,15 @@ final class BoardCameraTracker: NSObject, ObservableObject,
     }
 
     private func markTrackingLost(at uptime: TimeInterval) {
-        guard isRunning else { return }
-        if !BoardOpticalMath.isFresh(sampleUptime: lastOpticalUptime, now: uptime) {
-            if latestSample != nil {
-                latestSample = nil
-            }
-            status = hasZeroReference
-                ? "MARKER LOST: POSITION UNAVAILABLE UNTIL VISIBLE"
-                : "SEARCHING FOR BOARD MARKER"
-        }
+        guard isRunning, uptime >= lastProcessedFrameUptime else { return }
+        lastProcessedFrameUptime = uptime
+        // Do not show an old XYZ even briefly after ARKit reports that the
+        // image is no longer tracked. We never extrapolate marker position.
+        if latestSample != nil { latestSample = nil }
+        let label = hasZeroReference
+            ? "MARKER LOST: POSITION UNAVAILABLE UNTIL VISIBLE"
+            : "SEARCHING FOR BOARD MARKER"
+        if status != label { status = label }
     }
 
     func session(_ session: ARSession, didFailWithError error: Error) {
