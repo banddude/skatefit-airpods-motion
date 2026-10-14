@@ -38,13 +38,38 @@ final class BoardPoseTests: XCTestCase {
             // A true longitudinal flip is not representable as Euler pitch+roll.
             let expected = q.act(SIMD3<Double>(0, 0, 1))
             let projected = SIMD3<Double>(
-                expected.x, expected.z, -expected.y)
+                -expected.x, expected.z, expected.y)
             XCTAssertEqual(actual.x, projected.x, accuracy: 1e-5)
             XCTAssertEqual(actual.y, projected.y, accuracy: 1e-5)
             XCTAssertEqual(actual.z, projected.z, accuracy: 1e-5)
             XCTAssertEqual(pose.isInverted, degrees >= 135 && degrees <= 225)
             XCTAssertTrue(pose.fullAttitudeAvailable)
         }
+    }
+
+    func testNoseActuallyPointsUpDuringPositiveManualPose() throws {
+        let angle = 0.18
+        let gravity = Vector3(x: sin(angle), y: 0, z: -cos(angle))
+        let board = calibration()
+        let rotation = simd_quatd(angle: angle, axis: SIMD3(0, 1, 0))
+        let sample = MotionSample(
+            source: .headphone, sensorLocation: "left",
+            hostUptime: 1, deviceTimestamp: 1,
+            gravity: gravity, acceleration: .zero, rotationRate: .zero,
+            quaternion: Quaternion4(w: rotation.real, x: rotation.imag.x,
+                                    y: rotation.imag.y, z: rotation.imag.z))
+        let pose = try XCTUnwrap(board.orientation(for: sample))
+        XCTAssertGreaterThan(pose.pitchDegrees, 0)
+        XCTAssertTrue(pose.fullAttitudeAvailable)
+        let nose = try XCTUnwrap(pose.relativeQuaternion)
+            .rotate(Vector3(x: 1, y: 0, z: 0))
+        XCTAssertGreaterThan(nose.y, 0.12)
+
+        let gravityOnlyBoard = calibration(withAttitude: false)
+        let gravityPose = try XCTUnwrap(gravityOnlyBoard.orientation(for: sample))
+        let estimatedNose = try XCTUnwrap(gravityPose.relativeQuaternion)
+            .rotate(Vector3(x: 1, y: 0, z: 0))
+        XCTAssertGreaterThan(estimatedNose.y, 0.12)
     }
 
     func testDeckInversionWithoutQuaternionStillLabelsUpsideDown() throws {
@@ -85,6 +110,20 @@ final class BoardPoseTests: XCTestCase {
         XCTAssertFalse(pose.headingAvailable)
         XCTAssertNotNil(pose.relativeQuaternion)
         XCTAssertTrue(pose.relativeQuaternion?.isValid == true)
+    }
+
+    func testDisagreeingAttitudeFallsBackToMeasuredGravity() throws {
+        let board = calibration()
+        let sample = MotionSample(
+            source: .headphone, sensorLocation: "left",
+            hostUptime: 0, deviceTimestamp: 0,
+            gravity: Vector3(x: 0, y: 0, z: 1),
+            acceleration: .zero, rotationRate: .zero,
+            quaternion: .identity)
+        let pose = try XCTUnwrap(board.orientation(for: sample))
+        XCTAssertTrue(pose.isInverted)
+        XCTAssertFalse(pose.fullAttitudeAvailable)
+        XCTAssertFalse(pose.headingAvailable)
     }
 
     func testNoPositionIsFabricatedFromOrientation() {

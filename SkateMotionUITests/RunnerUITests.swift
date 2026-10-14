@@ -5,6 +5,24 @@ final class RunnerUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    func testManualCoachOpensBeforeGameplayAndOffersCalibration() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let coach = app.buttons["openManualBalanceCoach"]
+        XCTAssertTrue(coach.waitForExistence(timeout: 15),
+                      "Manual Balance Coach should be featured above the game")
+        coach.tap()
+        XCTAssertTrue(app.staticTexts["MANUAL BALANCE"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["START PRACTICE"].exists)
+        XCTAssertTrue(app.buttons["OPEN BOARD CALIBRATION"].exists)
+        XCTAssertTrue(app.staticTexts["TRAINING GOAL"].exists)
+        let back = app.buttons.matching(NSPredicate(
+            format: "label CONTAINS[c] %@", "Back to SkateFit")).firstMatch
+        XCTAssertTrue(back.exists)
+        back.tap()
+        XCTAssertTrue(app.buttons["openManualBalanceCoach"].waitForExistence(timeout: 5))
+    }
+
     func testDropInPauseResumeAndExit() throws {
         let app = XCUIApplication()
         app.launch()

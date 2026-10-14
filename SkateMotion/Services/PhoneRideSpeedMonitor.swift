@@ -5,7 +5,7 @@ import SwiftUI
 /// Optional outdoor context, sampled from the IPHONE, not the skateboard.
 /// We intentionally do not store, export, or upload coordinates or a route.
 @MainActor
-final class PhoneRideSpeedMonitor: NSObject, ObservableObject, CLLocationManagerDelegate {
+final class PhoneRideSpeedMonitor: NSObject, ObservableObject, @preconcurrency CLLocationManagerDelegate {
     @Published private(set) var tracking = false
     @Published private(set) var status = "GPS off"
     @Published private(set) var speedMetersPerSecond: Double?

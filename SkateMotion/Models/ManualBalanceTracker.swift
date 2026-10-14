@@ -31,6 +31,12 @@ struct ManualBalanceSnapshot: Equatable {
     var pitchDegrees = 0.0
     var rollDegrees = 0.0
     var angularSpeedDegreesPerSecond = 0.0
+    var pitchRateDegreesPerSecond = 0.0
+    var rollRateDegreesPerSecond = 0.0
+    var yawRateDegreesPerSecond = 0.0
+    var userAccelerationG = 0.0
+    var relativeYawDegrees = 0.0
+    var sampleRateHz = 0.0
     var stability = 0.0
     var currentHoldSeconds = 0.0
     var longestManualSeconds = 0.0
@@ -69,7 +75,8 @@ struct ManualBalanceTracker {
     private var lastGoodUptime: TimeInterval?
     private var currentQualitySum = 0.0
     private var currentQualityCount = 0
-    private var currentSquaredPitchError = 0.0
+    private var currentMeanTilt = 0.0
+    private var currentTiltM2 = 0.0
     private var countedAttempt = false
     private var goalRecorded = false
     private var completedQualitySum = 0.0
@@ -113,11 +120,17 @@ struct ManualBalanceTracker {
             return
         }
         lastUptime = t
+        if let interval = dt, interval > 0 && interval < 0.2 {
+            let instantHz = min(120, 1 / interval)
+            snapshot.sampleRateHz = snapshot.sampleRateHz == 0
+                ? instantHz : snapshot.sampleRateHz * 0.9 + instantHz * 0.1
+        }
 
         snapshot.hasPose = true
         snapshot.measuredSamples += 1
         snapshot.pitchDegrees = orientation.pitchDegrees
         snapshot.rollDegrees = orientation.rollDegrees
+        snapshot.relativeYawDegrees = orientation.yawDegrees
         snapshot.isInverted = orientation.isInverted
         if orientation.isInverted && !wasInverted {
             snapshot.inversionObservations += 1
@@ -132,7 +145,18 @@ struct ManualBalanceTracker {
         }
         let rotation = sample.rotationRate
         let rate = rotation.magnitude * 180 / Double.pi
+        let longitudinal = calibration.lengthAxis ?? .zero
+        let transverse = calibration.widthAxis ?? .zero
+        let normal = calibration.flatGravity ?? .zero
+        let pitchRate = abs(rotation.dot(transverse)) * 180 / Double.pi
+        let rollRate = abs(rotation.dot(longitudinal)) * 180 / Double.pi
+        let yawRate = abs(rotation.dot(normal)) * 180 / Double.pi
+        let userAcceleration = sample.acceleration.magnitude
         snapshot.angularSpeedDegreesPerSecond = rate
+        snapshot.pitchRateDegreesPerSecond = pitchRate
+        snapshot.rollRateDegreesPerSecond = rollRate
+        snapshot.yawRateDegreesPerSecond = yawRate
+        snapshot.userAccelerationG = userAcceleration
         let pitch = orientation.pitchDegrees
         let tilt = abs(pitch)
         let sideways = abs(orientation.rollDegrees)
@@ -140,10 +164,15 @@ struct ManualBalanceTracker {
         let target = settings.targetAngleDegrees
         let minimum = max(5, target - settings.toleranceDegrees)
         let maximum = min(calibration.manualUpperLimit, target + settings.toleranceDegrees)
-        let stable = sideways <= 12 && rate <= 125
+        let stable = sideways <= 12 && pitchRate <= 125 && rollRate <= 125 &&
+            userAcceleration <= 2.5
         let inRange = tilt >= minimum && tilt <= maximum && stable
+        // Pitch error is separate from actual wobble. Roll and pitch gyros
+        // penalize balance corrections more strongly than intentional yaw.
         let quality = max(0, min(100,
-            100 - abs(tilt - target) * 5.8 - sideways * 2.8 - rate * 0.11))
+            100 - abs(tilt - target) * 5.8 - sideways * 2.8 -
+            pitchRate * 0.12 - rollRate * 0.17 - yawRate * 0.035 -
+            max(0, userAcceleration - 0.15) * 6))
         snapshot.stability = snapshot.stability == 0
             ? quality : snapshot.stability * 0.78 + quality * 0.22
 
@@ -152,8 +181,9 @@ struct ManualBalanceTracker {
             if sideways > 12 {
                 snapshot.status = "SIDEWAYS TILT"
                 snapshot.coach = "Keep the deck level left-to-right."
-            } else if rate > 125 {
-                snapshot.status = "TOO MUCH ROTATION"
+            } else if pitchRate > 125 || rollRate > 125 ||
+                      userAcceleration > 2.5 {
+                snapshot.status = "TOO MUCH MOVEMENT"
                 snapshot.coach = "Settle your balance before measuring a hold."
             } else if tilt < minimum {
                 snapshot.status = "TOO FLAT"
@@ -172,7 +202,8 @@ struct ManualBalanceTracker {
             snapshot.currentHoldSeconds = 0
             currentQualitySum = 0
             currentQualityCount = 0
-            currentSquaredPitchError = 0
+            currentMeanTilt = 0
+            currentTiltM2 = 0
             countedAttempt = false
             goalRecorded = false
         }
@@ -187,7 +218,8 @@ struct ManualBalanceTracker {
             snapshot.currentHoldSeconds = 0
             currentQualitySum = 0
             currentQualityCount = 0
-            currentSquaredPitchError = 0
+            currentMeanTilt = 0
+            currentTiltM2 = 0
             countedAttempt = false
             goalRecorded = false
         }
@@ -195,8 +227,10 @@ struct ManualBalanceTracker {
         snapshot.currentHoldSeconds += acceptedDt
         currentQualitySum += quality
         currentQualityCount += 1
-        currentSquaredPitchError += pow(tilt - target, 2)
-        snapshot.wobbleRMSE = sqrt(currentSquaredPitchError / Double(currentQualityCount))
+        let difference = tilt - currentMeanTilt
+        currentMeanTilt += difference / Double(currentQualityCount)
+        currentTiltM2 += difference * (tilt - currentMeanTilt)
+        snapshot.wobbleRMSE = sqrt(max(0, currentTiltM2) / Double(currentQualityCount))
         snapshot.averageHoldStability = currentQualitySum / Double(currentQualityCount)
         snapshot.status = side.rawValue.uppercased()
         snapshot.coach = quality >= 78 ? "Smooth balance. Keep holding!" :

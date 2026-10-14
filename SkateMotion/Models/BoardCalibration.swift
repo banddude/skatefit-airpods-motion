@@ -100,7 +100,10 @@ struct BoardCalibration {
         var headingAvailable = false
 
         if let reference = flatAttitude, reference.isValid,
-           let current = sample.quaternion, current.isValid {
+           let current = sample.quaternion, current.isValid,
+           BoardPoseMath.attitudeAgreesWithGravity(
+               reference: reference, current: current,
+               calibratedFlatDown: flat, measuredDown: sample.gravity) {
             let initialLongitudinal = reference.rotate(length)
             let initialLateral = reference.rotate(width)
             let currentLongitudinal = current.rotate(length)
@@ -113,8 +116,13 @@ struct BoardCalibration {
         }
         let relative = flatAttitude.flatMap { reference in
             sample.quaternion.flatMap { current in
-                BoardPoseMath.relativeRotation(reference: reference, current: current,
-                                               length: length, width: width, down: flat)
+                guard BoardPoseMath.attitudeAgreesWithGravity(
+                    reference: reference, current: current,
+                    calibratedFlatDown: flat, measuredDown: sample.gravity
+                ) else { return nil }
+                return BoardPoseMath.relativeRotation(
+                    reference: reference, current: current,
+                    length: length, width: width, down: flat)
             }
         }
         let gravityRotation = BoardPoseMath.gravityOnlyRotation(

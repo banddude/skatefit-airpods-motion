@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Manual practice, based on the rigidly mounted AirPod's deck orientation.
 /// Hold times are orientation-qualified estimates, not measured wheel contact.
@@ -7,6 +8,7 @@ struct ManualBalanceCoachView: View {
     var openCalibration: () -> Void = {}
 
     @StateObject private var gps = PhoneRideSpeedMonitor()
+    @AppStorage("runner.haptics") private var hapticsEnabled = true
     @Environment(\.scenePhase) private var scenePhase
 
     private let dark = Color(red: 0.035, green: 0.065, blue: 0.13)
@@ -26,6 +28,7 @@ struct ManualBalanceCoachView: View {
                     setupInstructions
                 }
                 trainingGoals
+                rawSensorDetails
                 locationPanel
                 recentPractice
                 Text("Orientation-only training. SkateFit cannot see your feet, axle contact, deck height, location in 3D, or whether a manual was landed. Keep a reference video for technique review.")
@@ -38,6 +41,11 @@ struct ManualBalanceCoachView: View {
         }
         .background(dark.ignoresSafeArea())
         .foregroundStyle(.white)
+        .onChange(of: store.balance.completedGoals) { old, new in
+            if hapticsEnabled && new > old {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { gps.stop() }
         }
@@ -249,6 +257,55 @@ struct ManualBalanceCoachView: View {
         .background(panel, in: RoundedRectangle(cornerRadius: 18))
     }
 
+    private var rawSensorDetails: some View {
+        DisclosureGroup {
+            VStack(alignment: .leading, spacing: 10) {
+                sensorRow("Accepted sensor rate",
+                          String(format: "%.1f Hz", practice.sampleRateHz))
+                sensorRow("Relative yaw (not compass)",
+                          String(format: "%+.1f°", practice.relativeYawDegrees))
+                sensorRow("Pitch angular rate",
+                          String(format: "%.1f°/s", practice.pitchRateDegreesPerSecond))
+                sensorRow("Roll angular rate",
+                          String(format: "%.1f°/s", practice.rollRateDegreesPerSecond))
+                sensorRow("Yaw angular rate",
+                          String(format: "%.1f°/s", practice.yawRateDegreesPerSecond))
+                sensorRow("User acceleration",
+                          String(format: "%.2f g", practice.userAccelerationG))
+                if let acceleration = store.latestBoardAcceleration {
+                    sensorRow("Acceleration x/y/z",
+                        String(format: "%.2f / %.2f / %.2f g",
+                               acceleration.x, acceleration.y, acceleration.z))
+                }
+                if let rotation = store.latestBoardRotationRate {
+                    sensorRow("Gyro x/y/z",
+                        String(format: "%.2f / %.2f / %.2f rad/s",
+                               rotation.x, rotation.y, rotation.z))
+                }
+                Text("Recorded CSV also includes gravity x/y/z, attitude quaternion w/x/y/z, sensor timestamps and raw fused yaw/pitch/roll. Angles are relative to calibration.")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.62))
+            }
+            .padding(.top, 11)
+        } label: {
+            Label("ALL-AXIS SENSOR DETAILS", systemImage: "waveform.path.ecg")
+                .font(.subheadline.weight(.black))
+                .foregroundStyle(accent)
+        }
+        .tint(accent)
+        .padding(16)
+        .background(panel, in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    private func sensorRow(_ name: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(name).foregroundStyle(.white.opacity(0.65))
+            Spacer(minLength: 7)
+            Text(value).monospacedDigit()
+                .multilineTextAlignment(.trailing)
+        }.font(.caption)
+    }
+
     private var locationPanel: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
@@ -291,6 +348,14 @@ struct ManualBalanceCoachView: View {
     private var recentPractice: some View {
         VStack(alignment: .leading, spacing: 11) {
             Text("SAVED PRACTICE").font(.headline.weight(.black))
+            if !store.savedManualPractices.isEmpty {
+                let best = store.savedManualPractices.map(\.bestManualSeconds).max() ?? 0
+                let noseBest = store.savedManualPractices.map(\.bestNoseSeconds).max() ?? 0
+                HStack(spacing: 9) {
+                    metric("ALL-TIME MANUAL", String(format: "%.1fs", best), "trophy")
+                    metric("ALL-TIME NOSE", String(format: "%.1fs", noseBest), "trophy")
+                }
+            }
             if store.savedManualPractices.isEmpty {
                 Text("Complete a motion-recording session to save your best manual and nose-manual holds locally.")
                     .font(.caption)
