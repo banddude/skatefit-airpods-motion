@@ -57,18 +57,18 @@ xcodebuild -project SkateMotion.xcodeproj -scheme SkateMotion -destination 'plat
 - [x] Optional foreground iPhone GPS speed with explicit permission and no stored coordinates.
 - [ ] Physical deck-mounted AirPods confirmation of pitch sign, full inversion, gyro orientation, sample rates and score accuracy.
 - [ ] Benchmark tracker against independently recorded video showing wheels, feet and true manual starts/stops.
-- [ ] Optional tripod-camera object tracking remains an engineering plan, not implemented true XYZ.
+- [x] No camera or optical tracking; absolute board XYZ remains unavailable.
 
 
-## Beta 14: Optical marker field acceptance
 
-- [x] Opt-in camera-only ARKit image tracking for a known 120 mm printed marker.
-- [x] Camera-relative X/Y/Z and attitude only while ARKit reports marker tracking.
-- [x] Printed full-size original PDF and reference PNG, manual flat zero, lost-marker indication.
-- [x] Local, separately opted-in CSV with optical marker poses and nearby AirPod timing.
-- [ ] Print-and-ruler verify 120 mm width, 50 mm check scale and rigid attachment.
-- [ ] Measure 10 cm, 20 cm, 50 cm marker translations against a ruler at different camera distances, light conditions and oblique angles.
-- [ ] Test occlusion, reacquisition, frame latency and optical tracking failure handling on a real registered iPhone.
-- [ ] Verify stationary tripod requirement and examine error if camera moves.
-- [ ] Prove camera tracking can coexist with off-ear AirPod sensor streaming and evaluate time pairing.
-- [ ] Calibrate marker-to-deck offset and add independent wheel/foot-contact sensing before claiming real skateboard centre position, landed manuals, or jump height.
+
+## Beta 15: Sensor-only training acceptance
+
+- [x] No camera modules, camera usage description, image marker, or camera entry point in source.
+- [x] Board-selected AirPod sample integrity, timestamp-order checks and freshness watchdog.
+- [x] Qualified manual duration stops on interruptions or out-of-range frames.
+- [x] Per-hold technique metrics, failure reasons, saved attempts and next goals.
+- [x] Previous saved practice summaries remain readable.
+- [ ] Physical mounted-AirPod validation against witnessed manual duration and wobble.
+- [ ] Check dropout, reconnection, stale packets, false-positive holds and sustained battery use.
+- [ ] Verify installed IPA does not request camera permission.

@@ -1,12 +1,16 @@
-# Board Space Camera Lab: Beta 14
+# Beta 15: AirPod sensor-only manual training
 
-**New experimental 3D camera tracking:** Inside Manual Balance Coach, tap **Board Space Camera Lab**. Print the included **120 mm reference marker** at 100% size, tape it rigidly to a visible part of the skateboard, then put the iPhone on a stationary tripod and start the camera. ARKit estimates the printed marker's camera-relative X/Y/Z position in metres and its rotation while it remains visible. Set a flat-board zero to compare relative displacement in centimetres. If the marker is occluded or tracking fails, positions disappear instead of being extrapolated.
+**Latest enrolled-device beta:** https://skatefit-motion-lab.mikejshaffer.workers.dev/install
 
-**Optional local paired observations:** A separate Record Local Marker CSV button logs only tracked optical poses, camera frame timestamps, monotonic receipt times, and approximately time-matched AirPod pitch/roll/yaw. No video, microphone recordings or GPS coordinates are saved or uploaded. Camera tracking is off by default, as is the separate experimental cloud telemetry setting. The printable PDF is bundled inside the app for offline sharing and is also at [SkateMotion/Resources](SkateMotion/Resources/SkateFit_Board_Tracking_Marker_120mm.pdf).
+Camera tracking and camera permission are removed. The trainer uses the securely mounted AirPod's gravity, gyroscope, acceleration, timestamps and calibrated 360-degree attitude, plus optional iPhone GPS for outdoor speed. AirPod-only XYZ location and board jump height are **not reliably measurable**; the app does not fabricate them.
 
-**Important:** The coordinates are **relative to the phone camera**, not surveyed world or GPS coordinates. Moving the phone invalidates comparisons with an earlier zero. The tracked point is the marker, not the board's centre of mass or wheels, and changing board angle can raise the marker even if wheels stay on the ground. This is not a proven jump-height or landed-manual detector. AirPods alone still cannot calculate precise XYZ location from acceleration.
+**More accurate balance scoring:** Only fresh frames from the selected board AirPod qualify. Out-of-order, duplicate and implausible readings are rejected. Dropouts and even one flat or unstable frame break a candidate hold instead of inflating its duration. The new quality display shows actual sample rate, gaps, and rejected frames.
 
-[Full spatial tracking engineering notes](docs/SPATIAL_TRACKING_AND_MANUALS.md) | [Current beta installer](https://skatefit-motion-lab.mikejshaffer.workers.dev/install)
+**Practice progression:** Each qualified manual or nose-manual attempt is recorded locally with duration, mean tilt, RMS pitch wobble, sideways tilt, average stability, goal, and reason it ended. Suggested next milestones follow personal bests. Old Beta 13 practice records remain readable and no locally saved records are erased.
+
+The platform game remains intact with all 15 stages. Optional research uploads are still OFF by default. Without wheel/foot-contact sensors, these are **orientation-qualified candidate holds**, not independently verified landed skateboard tricks.
+
+[Training limitations and sensor validation](docs/SPATIAL_TRACKING_AND_MANUALS.md) | [Release checks](docs/RELEASE_CHECKLIST.md)
 
 ---
 

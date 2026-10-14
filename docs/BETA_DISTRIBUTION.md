@@ -1,6 +1,6 @@
 # SkateFit Motion Lab beta distribution
 
-The beta is a separate iPhone app with bundle identifier `com.banddude.skatefit.motionlab`, version `0.1.0`, build `1`. It does **not** modify the production SkateFit app.
+The beta is a separate iPhone app with bundle identifier `com.banddude.skatefit.motionlab`, version `0.1.0`, build `15`. It does **not** modify the production SkateFit app.
 
 **Direct-install page:** https://skatefit-motion-lab.mikejshaffer.workers.dev/install
 
@@ -65,14 +65,14 @@ Verify the exported IPA by extracting it, checking that `codesign --verify --dee
 
 ```bash
 wrangler r2 object put \
-  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-14.ipa \
+  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-15.ipa \
   --file /tmp/skatefit-motion-beta-export/SkateMotion.ipa \
   --remote --content-type application/octet-stream
 
 wrangler deploy
 ```
 
-The command above is illustrative only. The object key, manifest metadata, installer text and IPA version must all match the current build. Build 14 uses \`ios/SkateFitMotionLab-0.1.0-14.ipa\`. Never change the Worker installer to a build unless the new IPA object has been uploaded and its checksum verified.
+The command above is illustrative only. The object key, manifest metadata, installer text and IPA version must all match the current build. Build 15 uses \`ios/SkateFitMotionLab-0.1.0-15.ipa\`. Never change the Worker installer to a build unless the new IPA object has been uploaded and its checksum verified.
 
 ## TestFlight transition
 
@@ -234,3 +234,10 @@ Yaw is relative to flat calibration and may drift over time.
 - Bundles the original 120 mm printable PDF reference marker and preview for offline sharing.
 - Separate opt-in camera permission, and separate optional local CSV; no photos, camera video or GPS locations are recorded or uploaded.
 - Optical readings require stationary phone and unobstructed printed reference marker. Physical accuracy tests are still required before treating camera coordinates as reliable.
+
+
+## Beta 15: AirPod sensor-only manual coach
+
+- Removes camera and optical marker tracking, app permission and printed marker assets.
+- Adds source-specific AirPod sample quality, detailed manual attempt history, stream interruption handling, and personal goal recommendations.
+- Local training and game data retained. Production SkateFit remains unchanged.
