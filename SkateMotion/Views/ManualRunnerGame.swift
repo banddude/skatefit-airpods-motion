@@ -40,7 +40,7 @@ struct ManualRunnerGame: View {
     @State private var progress = RunnerProgressStore()
     @State private var page: RunnerPage = .play
     @State private var phase: RunnerPhase = .paused
-    @State private var selectedLevel = 1
+    @AppStorage("runner.selectedCourseID") private var selectedLevel = 1
     @State private var manualHeld = false
     @State private var noseHeld = false
     @State private var queuedManual = false
@@ -114,6 +114,15 @@ struct ManualRunnerGame: View {
         .foregroundStyle(.white)
         .background(background.ignoresSafeArea())
         .onReceive(ticker) { now in tick(now) }
+        .onAppear {
+            // Old beta selections and corrupted preferences cannot navigate
+            // outside the known course catalog.
+            let validated = RunnerCourse.get(selectedLevel).id
+            if selectedLevel != validated { selectedLevel = validated }
+            if page != .run && engine.level != validated {
+                engine.reset(course: validated)
+            }
+        }
         .onChange(of: scenePhase) { _, next in
             if next != .active && phase == .active {
                 pause()
@@ -434,6 +443,19 @@ struct ManualRunnerGame: View {
             Toggle("System sound effects", isOn: $soundEnabled).panel()
             Toggle("Reduced background motion", isOn: $reduceSceneMotion).panel()
             Toggle("High contrast", isOn: $highContrast).panel()
+            VStack(alignment: .leading, spacing: 11) {
+                Text("HOW TO BUILD A PERFECT LINE")
+                    .font(.caption2.weight(.black)).tracking(1.4)
+                    .foregroundStyle(accent)
+                Text("1  MANUAL pops over street gaps and barriers.")
+                Text("2  NOSE MANUAL ducks under beams and neon gates.")
+                Text("3  Hold either balance pose on its matching glowing strip to charge your Flow Meter.")
+                Text("4  Filled Flow doubles your score. Finish clean, grab pickups and hold balance lines to earn all three stars.")
+                Text("5  Green launch ramps automatically give you extra height for the long chasms.")
+            }
+            .font(.caption)
+            .foregroundStyle(.white.opacity(0.8))
+            .panel()
             Button("Open recorder and 3D calibration") { openMotionLab() }
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(accent)

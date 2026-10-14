@@ -15,7 +15,8 @@ final class RunnerUITests: XCTestCase {
         dropIn.tap()
 
         XCTAssertTrue(app.staticTexts["UP NEXT"].waitForExistence(timeout: 7))
-        XCTAssertTrue(app.staticTexts["FLOW METER"].exists)
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(
+            format: "label CONTAINS[c] %@", "Flow meter")).firstMatch.exists)
 
         let pause = app.buttons["Pause"]
         XCTAssertTrue(pause.exists)
