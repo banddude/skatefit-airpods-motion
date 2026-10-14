@@ -3,8 +3,11 @@
 ## Product promise
 A complete 2.5D platform adventure with a real skateboarding motion controller, optional touch controls, and a polished game that remains fun without an AirPod. Keep the actual game separate from the AirPod diagnostics and motion lab.
 
-## Current implementation status
-Five simple courses, a SwiftUI-drawn playfield, jump/duck input, basic hazards, score, lives, and persistent unlocks exist. This is NOT a production-ready game. There is no shipped character animation system, authored level editor, licensed commercial art/audio pack, proper controller compatibility testing, accessibility certification, purchase entitlement implementation, or real-AirPod gameplay acceptance. The latest audit fixed a stale backend release test and added deterministic runner tests; neither implies a commercial release is ready.
+## Current implementation status (October 2026, beta 11)
+
+**Implemented in source:** Five patterned worlds with a 3-minute first course; deterministic 120 Hz physics with buffered jump/coyote time and hazard overlap windows; manual and nose manual balance-line mechanics; checkpoint retry; collectibles, score/combo/stars; 30/60/120 Hz equivalence testing; automated zero-hit, three-star completion traces for every world; offline touch, optional GameController and calibrated AirPod input with sensor-loss pause; a night-city procedural rider scene; Play/Worlds/Goals/Decks/Profile/Settings navigation; optional system sound feedback and haptics; reduced parallax and high-contrast options; offline saved progress with file backup and corruption recovery; cloud telemetry disabled by default.
+
+**Not complete for a commercial launch:** authored multi-course worlds rather than one course per world; accessibility and sustained performance validation on real devices; commercial model, character animation and custom music/sound production; a true reusable level editor and player run replay recordings; iCloud sync; hardware AirPods gameplay acceptance; an authenticated production telemetry service (the laboratory server is intentionally public); Store/paid distribution, receipt handling, localization and human playtest signoff. All five courses have a deterministic finish trace, but automated playability is not proof of fun, fair novice timing or field readiness.
 
 ## Vertical slice: complete before expanding content
 1. One 3-minute authored course with a strong start, rising difficulty, checkpoint, finale, and three replay goals. Every obstacle must be beatable with a realistic input timing window.
