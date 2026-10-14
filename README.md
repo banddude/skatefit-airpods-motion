@@ -1,3 +1,15 @@
+# Board Space Camera Lab: Beta 14
+
+**New experimental 3D camera tracking:** Inside Manual Balance Coach, tap **Board Space Camera Lab**. Print the included **120 mm reference marker** at 100% size, tape it rigidly to a visible part of the skateboard, then put the iPhone on a stationary tripod and start the camera. ARKit estimates the printed marker's camera-relative X/Y/Z position in metres and its rotation while it remains visible. Set a flat-board zero to compare relative displacement in centimetres. If the marker is occluded or tracking fails, positions disappear instead of being extrapolated.
+
+**Optional local paired observations:** A separate Record Local Marker CSV button logs only tracked optical poses, camera frame timestamps, monotonic receipt times, and approximately time-matched AirPod pitch/roll/yaw. No video, microphone recordings or GPS coordinates are saved or uploaded. Camera tracking is off by default, as is the separate experimental cloud telemetry setting. The printable PDF is bundled inside the app for offline sharing and is also at [SkateMotion/Resources](SkateMotion/Resources/SkateFit_Board_Tracking_Marker_120mm.pdf).
+
+**Important:** The coordinates are **relative to the phone camera**, not surveyed world or GPS coordinates. Moving the phone invalidates comparisons with an earlier zero. The tracked point is the marker, not the board's centre of mass or wheels, and changing board angle can raise the marker even if wheels stay on the ground. This is not a proven jump-height or landed-manual detector. AirPods alone still cannot calculate precise XYZ location from acceleration.
+
+[Full spatial tracking engineering notes](docs/SPATIAL_TRACKING_AND_MANUALS.md) | [Current beta installer](https://skatefit-motion-lab.mikejshaffer.workers.dev/install)
+
+---
+
 # Manual Balance Coach beta 13: full board orientation and real practice goals
 
 **Latest enrolled-device iPhone beta:** https://skatefit-motion-lab.mikejshaffer.workers.dev/install

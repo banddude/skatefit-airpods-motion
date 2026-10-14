@@ -13,7 +13,8 @@ Updated 2026-10-13. This is the engineering contract behind Manual Balance Coach
 | Manual/nose-manual pose-hold time | Pitch target, sideways tilt, angular rate, device sample timing | Yes | **Candidate hold of a board pose only.** Neither wheels nor feet are sensed. Timing stops on disconnection/inversion/excessive tilt. |
 | Pitch wobble and stability | Running RMS of calibrated pitch about its measured mean, plus target error, roll, angular rates and acceleration | Yes | Technique feedback, **not a validated physiological training score**. Compare your own sessions. |
 | Outdoor riding speed | Optional iPhone GPS/Core Location | Yes | iPhone velocity, not independent board velocity. Requires permission and adequate fix; no route or coordinates stored or uploaded. |
-| Translation X/Y/Z and vertical jump height | None | **No** | A single AirPod IMU's acceleration cannot be integrated into stable position because initial velocity, sensor bias and gravity subtraction error drift rapidly. Do not display fabricated XYZ or height. |
+| AirPod-only translation X/Y/Z and vertical jump height | None | **No** | A single AirPod IMU's acceleration cannot be integrated into stable position because initial velocity, sensor bias and gravity subtraction error drift rapidly. Do not display fabricated XYZ or height. |
+| Camera-relative optical marker X/Y/Z and rotation | Opt-in ARKit image tracking of a known 120 mm printed square | **Yes, experimental** | Requires visible marker, correct printing and stationary iPhone. Only marker movement in camera coordinates, not deck centre or actual height. |
 | Actual wheels and board contact with ground | Camera / wheel sensors / additional equipment | **No** | Required to distinguish a grounded manual from holding a board up, a lift, an ollie, or upside-down flight. |
 | Actual rider's center of mass / foot position | Camera / wearable / pressure deck | **No** | Beyond a mounted AirPod's capability. |
 
@@ -37,10 +38,16 @@ Updated 2026-10-13. This is the engineering contract behind Manual Balance Coach
 
 ## Next step for true skateboard X/Y/Z and wheel-contact proof
 
-### Stationary iPhone video + computer vision
-Use a second stationary iPhone (or a tripod-mounted primary phone that is not in the rider's pocket) to record the board. Start with Apple's Vision object tracking to follow a nominated deck bounding box. That is initially 2D **image-space motion**, not reliable metric translation.
+### Board Space Camera Lab (experimental Beta 14 implementation)
 
-For measured 3D position: attach a known-size fiducial target to the deck, calibrate camera intrinsics, solve the object's six-degree pose frame-to-frame with a validated pose solver, and fuse those video measurements with time-synchronized AirPod quaternion data. Test visibility under feet, occlusion, low light, rolling motion, and blur. LiDAR can help with distance if the device and camera view support it, but is not a magical pose fix. Record camera reference time and AirPod host receipt time separately; do not assume their device timestamps share a clock.
+- Printable reference: [the original 120 mm marker PDF](../SkateMotion/Resources/SkateFit_Board_Tracking_Marker_120mm.pdf). Print at 100% actual size. Verify the 50 mm ruler line. The detected square must be exactly 120 mm wide or metric estimates will be systematically scaled incorrectly.
+- Secure marker rigidly at a visible portion of the board. Keep the iPhone on a stationary tripod. The implementation uses ARImageTrackingConfiguration and an ARReferenceImage with 0.12 metre physical width.
+- While ARKit reports the image anchor is tracked, transform each frame's marker and camera poses into camera-local coordinates using inverse(camera transform) times marker transform. This yields the 3D translation of the *marker* in metres and a relative orientation quaternion. Do not propagate estimates when tracking is lost.
+- An explicit flat-board zero creates a baseline; delta X, Y and Z in centimetres and angular movement are the difference between the current marker and that baseline. Camera movement makes the baseline invalid. Board tilting can raise the marker even if a wheel stays on the ground, so this is not jump height or verified wheel contact.
+- A separately opt-in, local-only CSV records only tracked marker X/Y/Z and orientation change, camera frame timestamps, monotonic receipt times, and approximately receipt-time-matched AirPod pitch/roll/yaw. These sensors do not have proven hardware synchronized clocks. No camera imagery, video, microphone recording or GPS coordinates are captured in the CSV.
+- **Not physically validated:** frame rates, image target acquisition at long distances, poor lighting, deck spin, blurred motion, occlusion by the skater, ARKit drift, camera movement, or actual positioning accuracy must be tested against a tape measure. Do not claim reliable real-world 3D accuracy until then.
+
+Future alternatives include markerless 2D object tracking from Apple's Vision framework, optical 6DoF pose estimation with measured camera intrinsics, and contact sensors for wheels or foot placement. Markerless 2D pixel displacement is not metric XYZ without additional geometry.
 
 ### Other optional hardware
 A custom skateboard-mounted UWB or Bluetooth Channel Sounding ranging accessory could be integrated with Apple's Nearby Interaction accessory workflow. The AirPod itself is **not** exposed to developers as an arbitrary ranging tag through that API. Ranging alone may provide distance and sometimes direction to an anchor; robust board XYZ requires geometry, suitable anchors, hardware and testing.

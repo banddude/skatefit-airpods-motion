@@ -65,14 +65,14 @@ Verify the exported IPA by extracting it, checking that `codesign --verify --dee
 
 ```bash
 wrangler r2 object put \
-  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-13.ipa \
+  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-14.ipa \
   --file /tmp/skatefit-motion-beta-export/SkateMotion.ipa \
   --remote --content-type application/octet-stream
 
 wrangler deploy
 ```
 
-The command above is illustrative only. The object key, manifest metadata, installer text and IPA version must all match the current build. Build 13 uses \`ios/SkateFitMotionLab-0.1.0-13.ipa\`. Never change the Worker installer to a build unless the new IPA object has been uploaded and its checksum verified.
+The command above is illustrative only. The object key, manifest metadata, installer text and IPA version must all match the current build. Build 14 uses \`ios/SkateFitMotionLab-0.1.0-14.ipa\`. Never change the Worker installer to a build unless the new IPA object has been uploaded and its checksum verified.
 
 ## TestFlight transition
 
@@ -226,3 +226,11 @@ Yaw is relative to flat calibration and may drift over time.
 - Added an explicit opt-in, foreground-only Core Location outdoor iPhone speed display. No coordinates or location route are stored or uploaded.
 - Added tests for full 360° rotation, nose-up sign, rejected invalid/contradictory attitudes, sensor dropouts, excluded phone data, and training history.
 - The separate production SkateFit app remains unchanged. AirPods off-ear sensor operation and commercial release still require hardware field tests.
+
+
+## Beta build 14: Board Space Camera Lab
+
+- Adds optical camera-marker X/Y/Z (metres) and orientation via ARKit image tracking, with known printed size, flat-zero reference and lost-tracking behavior.
+- Bundles the original 120 mm printable PDF reference marker and preview for offline sharing.
+- Separate opt-in camera permission, and separate optional local CSV; no photos, camera video or GPS locations are recorded or uploaded.
+- Optical readings require stationary phone and unobstructed printed reference marker. Physical accuracy tests are still required before treating camera coordinates as reliable.

@@ -16,6 +16,12 @@ This prototype deliberately has **no authentication** on its cloud development c
 
 Raw sensor readings are stored in a Cloudflare D1 database, which is used for reviewing sessions and developing classifiers. An installable iOS beta is hosted separately in Cloudflare R2. This Ad Hoc IPA includes an Apple provisioning profile identifying enrolled test devices. Cloudflare processes requests and may maintain ordinary infrastructure logs.
 
+## Optional camera-based board marker tracking
+
+Board Space Camera Lab is OFF until explicitly enabled. The app uses the iPhone rear camera through ARKit to track a **printed, rigidly mounted 120 mm marker**. Camera frames, photos, video and microphone audio are not saved or uploaded. During tracking, ARKit estimates the marker's position in local camera coordinates. Choosing the separate Record Local Marker CSV action saves these relative X/Y/Z observations, timestamps and available near-time AirPod motion readings **only locally on the iPhone**; you may explicitly share the CSV. The optical CSV is not sent to the public research dashboard. No GPS coordinates or routes are included. Tracking and recording stop when the user leaves the camera view or the app backgrounds.
+
+The camera measurement is an experimental, unvalidated marker-location estimate, not a verified skateboard-centre position, actual flight height or ground-contact signal.
+
 ## Local manual-training measurements
 
 SkateFit Manual Balance Coach records calibrated tilt, sideways wobble and candidate manual/nose-manual pose-hold durations from the board-mounted AirPod. Each completed session saves best holds, attempt counts, settings, and initial heuristic stability scores locally. These measurements are **not proof** of wheel contact or successful tricks. No raw GPS coordinates, video, or 3D translations are captured by the coaching system. Raw motion CSV continues under the existing local session archive.
