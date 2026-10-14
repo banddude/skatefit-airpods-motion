@@ -1,4 +1,5 @@
 import dashboard from "./dashboard.js";
+import { installHTML, installManifest, getBetaAsset } from "./beta.js";
 import { DEFAULT_RULES, validateRules, reprocessSamples } from "./detector.js";
 
 const json = (value, status=200) => new Response(JSON.stringify(value), {
@@ -151,6 +152,20 @@ async function csvExport(db,id){
 async function handle(request,env) {
   const u=new URL(request.url),path=u.pathname,method=request.method;
   if(method==="OPTIONS")return new Response(null,{status:204});
+  if((method==="GET"||method==="HEAD")&&path==="/install") {
+    return new Response(method==="HEAD"?null:installHTML,{
+      headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}
+    });
+  }
+  if((method==="GET"||method==="HEAD")&&path==="/beta/manifest.plist") {
+    return new Response(method==="HEAD"?null:installManifest,{
+      headers:{"content-type":"application/xml; charset=utf-8","cache-control":"no-store"}
+    });
+  }
+  if((method==="GET"||method==="HEAD")&&path==="/beta/SkateFitMotionLab.ipa")
+    return getBetaAsset(request,env,"ipa");
+  if((method==="GET"||method==="HEAD")&&path==="/beta/icon.png")
+    return getBetaAsset(request,env,"icon");
   if(method==="HEAD"&&(path==="/"||path==="/health")){
     return new Response(null,{status:200,headers:{
       "content-type":path==="/"?"text/html; charset=utf-8":"application/json; charset=utf-8"

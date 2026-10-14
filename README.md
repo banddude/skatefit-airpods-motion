@@ -6,6 +6,8 @@ This is a **working SwiftUI prototype** plus a **Cloudflare Worker / D1 telemetr
 
 **Live dashboard:** https://skatefit-motion-lab.mikejshaffer.workers.dev
 
+**Beta privacy:** [Privacy and Data Policy](PRIVACY.md)
+
 **Remote diagnostics, API examples and calibration troubleshooting:** [Remote Debugging Guide](docs/REMOTE_DEBUGGING.md).
 
 ## Features implemented
@@ -22,6 +24,18 @@ This is a **working SwiftUI prototype** plus a **Cloudflare Worker / D1 telemetr
 - Remote rule updates fetched by the iPhone approximately every 15 seconds while the app is active.
 
 **Not verified:** real off-ear AirPods tracking, accuracy at skateboard impacts, trick identification or whether a trick was actually landed. The app and server distinguish candidates from observations.
+
+
+
+## Install the signed iPhone beta
+
+**Open [SkateFit Motion Lab's install page](https://skatefit-motion-lab.mikejshaffer.workers.dev/install) in Safari on the registered iPhone.** Tap Install Beta and accept the iOS confirmation. This is a separately signed, Ad Hoc distribution, not a TestFlight build. It does not modify the existing SkateFit application.
+
+[Beta distribution and signing instructions](docs/BETA_DISTRIBUTION.md).
+
+The direct-install IPA is served from a separate Cloudflare R2 bucket through the Worker. The signed binary is deliberately not committed to the public source repository. An Ad Hoc provisioning profile restricts installation to enrolled devices; the binary may reveal its enrolled device identifiers to anyone who downloads it. This temporary distribution is intentionally public for rapid testing.
+
+**For TestFlight** a separate App Store Connect app record is still required. The repository can be archived and exported with signing certificates, but creating the record requires a logged-in Apple web session. Apple API-key authentication alone cannot create an app record via the public App Store Connect API.
 
 ## Build on a Mac
 

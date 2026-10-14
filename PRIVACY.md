@@ -1,0 +1,31 @@
+# SkateFit Motion Lab beta: data and privacy
+
+**Last updated: October 13, 2026.**
+
+SkateFit Motion Lab is a public, experimental research prototype that uses the iPhone's motion sensors and compatible AirPods to investigate skateboard trick recognition.
+
+## Data collected
+
+During recording, the app collects accelerometer, gravity, angular-velocity, sensor-orientation and timestamp readings from the iPhone and connected AirPods. It also records calibration positions, candidate motion events and any experimental labels added in the web dashboard. Each recording receives a random session identifier.
+
+The app does **not** intentionally collect microphone recordings, photos, contact lists, account credentials or precise GPS location. It does not ask for user login. It does transmit sensor and timestamp data to Cloudflare through the public developer API when the cloud-sync switch is enabled (enabled by default).
+
+## Public experimental system
+
+This prototype deliberately has **no authentication** on its cloud development console. Recorded sessions, raw readings, event labels and detector settings are available to anyone who knows or discovers the dashboard URL. Visitors can also edit the experiment settings and upload data. Do not use this service for sensitive or identifying information.
+
+Raw sensor readings are stored in a Cloudflare D1 database, which is used for reviewing sessions and developing classifiers. An installable iOS beta is hosted separately in Cloudflare R2. This Ad Hoc IPA includes an Apple provisioning profile identifying enrolled test devices. Cloudflare processes requests and may maintain ordinary infrastructure logs.
+
+## Retention
+
+This development prototype currently has no automatic expiration or retention policy. Motion samples and labels remain stored until they are manually deleted as part of project maintenance. Local unsent batches are persisted on the iPhone to retry uploads after loss of connectivity.
+
+## Sharing, sales and advertising
+
+No data is sold to advertisers, and the app does not use advertising or tracking identifiers. The cloud development dashboard is intentionally open to the public, as explained above.
+
+## Choices and contact
+
+The cloud sync switch can be turned off in the app. This does not automatically erase already-uploaded sessions. You can submit an issue at [the project's GitHub repository](https://github.com/banddude/skatefit-airpods-motion/issues) about deleting a session or making a privacy-related change.
+
+This privacy notice applies only to the experimental **SkateFit Motion Lab** prototype, not the separate production SkateFit application.

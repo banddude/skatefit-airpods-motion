@@ -8,3 +8,8 @@ account_id = "8e83fee9ba5b2bf423d5ffddaaee74c6"
 binding = "DB"
 database_name = "skatefit-motion-lab"
 database_id = "046a6df8-1550-4c82-8d4d-ef3f0d647fe6"
+
+
+[[r2_buckets]]
+binding = "BETAS"
+bucket_name = "skatefit-motion-betas"

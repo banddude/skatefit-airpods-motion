@@ -10,3 +10,15 @@ build/
 *.csv
 *.jsonl
 captures/
+
+
+# Keep signing material and compiled binaries outside this public repository
+*.ipa
+*.xcarchive/
+*.mobileprovision
+*.p12
+*.p8
+*.cer
+*.csr
+*.key
+*.pem
