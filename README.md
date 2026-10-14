@@ -1,3 +1,19 @@
+# Beta 16: AirPod controls now drive the Manual Runner game
+
+Registered iPhone beta: https://skatefit-motion-lab.mikejshaffer.workers.dev/install
+
+Fixed the disconnect between training and the game. Previous releases opened the runner in Touch mode by default even with a calibrated board AirPod actively recording. The platform also scrolled and collected points without requiring physical board movement.
+
+The new default control mode is Auto. When the selected board-mounted AirPod has a calibrated, fresh motion stream, DROP IN opens a real AirPod-controlled run. RIDE WITH BOARD offers a direct one-tap choice even when old settings saved Touch. When no board is ready, the game clearly says so and links to Motion Lab calibration.
+
+AirPod runs initially remain stationary, with no progress, scoring or lost lives until the actual board is tilted. Nose up triggers a manual pop and tail up triggers a nose-manual duck. Thresholds follow the Manual Balance Coach target/tolerance with sensor hysteresis.
+
+The runner's skateboard graphics and an embedded native 3D board now follow the real calibrated AirPod pose, including inversion when fused quaternion attitude is available. Pitch, roll, sensor status and the active game action are visibly displayed. An upside-down or edge-on board cannot falsely trigger a jump. AirPod signal loss pauses gameplay rather than silently switching to Touch.
+
+Touch/gamepad remain fully playable, clearly labeled and offline. Camera-free tracking is unchanged. AirPods do not prove wheel contact, absolute board XYZ, or a successfully landed trick. Tests can verify game routing and simulated response; true board-mounted hardware behavior needs physical testing.
+
+---
+
 # Beta 15: AirPod sensor-only manual training
 
 **Latest enrolled-device beta:** https://skatefit-motion-lab.mikejshaffer.workers.dev/install

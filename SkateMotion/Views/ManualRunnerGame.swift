@@ -29,7 +29,7 @@ private enum RunnerPage: String, CaseIterable, Identifiable {
 }
 
 private enum RunnerPhase: Equatable {
-    case active, paused, finished
+    case armed, active, paused, finished
 }
 
 /// Offline-first platform adventure. Real board motion is an OPTIONAL controller.
@@ -48,11 +48,13 @@ struct ManualRunnerGame: View {
     @State private var queuedManual = false
     @State private var accessibleNoseRemaining = 0.0
     @State private var motionAdapter = RunnerMotionAdapter()
+    @State private var activeSource: RunnerControlSource = .touch
+    @State private var acceptedInput = RunnerInput()
     @State private var lastTick = Date()
     @State private var lastFeedbackEvent = 0
     @State private var sensorDropped = false
 
-    @AppStorage("runner.controlMode") private var controlModeRaw = "Touch"
+    @AppStorage("runner.controlMode") private var controlModeRaw = "Auto"
     @AppStorage("runner.haptics") private var hapticsEnabled = true
     @AppStorage("runner.sound") private var soundEnabled = false
     @AppStorage("runner.lowMotion") private var reduceSceneMotion = false
@@ -74,6 +76,21 @@ struct ManualRunnerGame: View {
     }
 
     private var course: RunnerCourse { RunnerCourse.get(selectedLevel) }
+
+    private var activationDegrees: Double {
+        let settings = store.balanceSettings.validated
+        return max(5, settings.targetAngleDegrees - settings.toleranceDegrees)
+    }
+
+    private var boardIsUpright: Bool {
+        guard let orientation = store.latestOrientation else { return false }
+        return orientation.upAlignment > 0.45 && !orientation.isInverted &&
+            !orientation.isOnEdge
+    }
+
+    private var resolvedHomeSource: RunnerControlSource? {
+        mode.resolvedSource(sensorReady: motionReady)
+    }
 
     private var deckColor: Color {
         switch progress.career.selectedDeck {
@@ -140,12 +157,12 @@ struct ManualRunnerGame: View {
             }
         }
         .onChange(of: scenePhase) { _, next in
-            if next != .active && phase == .active {
+            if next != .active && (phase == .active || phase == .armed) {
                 pause()
             }
         }
         .onDisappear {
-            if phase == .active { pause() }
+            if phase == .active || phase == .armed { pause() }
         }
     }
 
@@ -223,6 +240,8 @@ struct ManualRunnerGame: View {
             .buttonStyle(.plain)
             .accessibilityIdentifier("openManualBalanceCoach")
 
+            gameInputStatus
+
             ZStack(alignment: .bottomLeading) {
                 RunnerSceneView(engine: engine, deckColor: deckColor,
                                 reduceMotion: reduceSceneMotion || systemReduceMotion,
@@ -286,6 +305,73 @@ struct ManualRunnerGame: View {
             }
             .panel()
         }
+    }
+
+    private var gameInputStatus: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: motionReady ? "airpodspro" : "waveform.path.ecg")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundStyle(motionReady ? accent : .orange)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(motionReady ? "LIVE BOARD INPUT AVAILABLE" :
+                            "BOARD INPUT NOT ACTIVE")
+                        .font(.caption2.weight(.black)).tracking(1)
+                        .foregroundStyle(motionReady ? accent : .orange)
+                    Text(motionReady ?
+                         "\(store.boardSide.title) AirPod · " +
+                         String(format: "%+.1f° pitch", store.gamePitch ?? 0) +
+                         " · " + String(format: "%.0f Hz", store.boardHealth.sampleRateHz) :
+                         store.isRecording
+                            ? (store.hasCalibration ?
+                                "Waiting for fresh board readings" :
+                                "Finish the three board calibration poses")
+                            : "Start recording and calibrate in Motion Lab")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.78))
+                }
+                Spacer(minLength: 0)
+                Text(mode.rawValue.uppercased())
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            if motionReady {
+                if resolvedHomeSource == .touch {
+                    Text("The board is streaming, but the runner is set to Touch. Choose Ride with Board to use real tilt.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                } else {
+                    Text("Next run: AirPod motion controls. The game waits until you tilt the board to start.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+                Button {
+                    controlModeRaw = RunnerControlMode.motion.rawValue
+                    startCourse(forceBoard: true)
+                } label: {
+                    Label("RIDE WITH BOARD", systemImage: "airpodspro")
+                        .font(.subheadline.weight(.black))
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(accent)
+                .accessibilityIdentifier("rideWithBoard")
+            } else {
+                Button {
+                    openMotionLab()
+                } label: {
+                    Label("CONNECT & CALIBRATE BOARD AIRPOD",
+                          systemImage: "waveform.path")
+                        .font(.caption.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                }
+                .buttonStyle(.bordered)
+                .tint(accent)
+                .accessibilityIdentifier("connectBoardAirPod")
+            }
+        }
+        .panel()
+        .accessibilityElement(children: .contain)
     }
 
     private var worldList: some View {
@@ -463,7 +549,7 @@ struct ManualRunnerGame: View {
     private var settingsScreen: some View {
         VStack(alignment: .leading, spacing: 17) {
             sectionHeading("Your ride, your rules.",
-                           subtitle: "AirPods are optional. Touch and supported gamepads work offline.")
+                           subtitle: "Auto uses calibrated AirPods when available; touch remains playable offline.")
             VStack(alignment: .leading, spacing: 10) {
                 Text("CONTROLS").font(.caption2.bold()).tracking(1.3).foregroundStyle(accent)
                 Picker("Control method", selection: $controlModeRaw) {
@@ -472,14 +558,20 @@ struct ManualRunnerGame: View {
                     }
                 }.pickerStyle(.segmented)
                 Text(mode == .touch ?
-                     "Hold MANUAL to pop and balance. Hold NOSE MANUAL to duck and balance. Gamepad A / B also work." :
-                     "Hold a calibrated board-mounted AirPod at nose-up or nose-down pitch. Start a motion session first.")
+                     "Touch only: hold MANUAL to pop or NOSE MANUAL to duck. Gamepad A and B also work." :
+                     mode == .automatic ?
+                     "Auto uses LIVE AirPods whenever the calibrated sensor is ready before Drop In. Otherwise the game clearly uses touch controls." :
+                     "AirPods only: calibrated nose-up pitch pops, tail-up pitch ducks. The game waits for your first tilt before moving.")
                     .font(.caption).foregroundStyle(.white.opacity(0.7))
-                if mode == .motion {
-                    Label(motionReady ? "Motion controls connected" :
-                            "Start recording and calibrate in the Motion Lab",
+                if mode != .touch {
+                    Label(motionReady ? "AirPod input ready for the next run" :
+                            "No calibrated board stream. Start a motion session and calibrate.",
                           systemImage: motionReady ? "checkmark.circle.fill" : "exclamationmark.circle")
-                        .font(.caption).foregroundStyle(motionReady ? accent : .orange)
+                        .font(.caption)
+                        .foregroundStyle(motionReady ? accent : .orange)
+                    Text("Manual / nose action starts near \(Int(activationDegrees))° of pitch. Board yaw and roll remain visible in the 3D preview.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.68))
                     Button("Open Motion Lab") { openMotionLab() }
                         .buttonStyle(.bordered).tint(accent)
                 }
@@ -558,7 +650,7 @@ struct ManualRunnerGame: View {
                     }
                     Spacer()
                     Button {
-                        if phase == .active { pause() }
+                        if phase == .active || phase == .armed { pause() }
                         else if phase == .paused && !sensorDropped { resume() }
                     } label: {
                         Image(systemName: phase == .active ? "pause.fill" : "play.fill")
@@ -566,7 +658,8 @@ struct ManualRunnerGame: View {
                             .background(soft, in: Circle())
                     }
                     .disabled(phase == .finished)
-                    .accessibilityLabel(phase == .active ? "Pause" : "Resume")
+                    .accessibilityLabel(
+                        (phase == .active || phase == .armed) ? "Pause" : "Resume")
                 }
                 .padding(.top, 8)
 
@@ -608,8 +701,13 @@ struct ManualRunnerGame: View {
 
                 RunnerSceneView(engine: engine, deckColor: deckColor,
                                 reduceMotion: reduceSceneMotion || systemReduceMotion,
-                                highContrast: highContrast)
+                                highContrast: highContrast,
+                                livePitchDegrees: activeSource == .motion &&
+                                    motionReady ? store.latestOrientation?.pitchDegrees : nil)
 
+                if activeSource == .motion {
+                    liveBoardInGame
+                }
 
                 HStack(spacing: 8) {
                     Image(systemName: engine.eventKind == "damage" ?
@@ -640,33 +738,133 @@ struct ManualRunnerGame: View {
                 .background(soft, in: RoundedRectangle(cornerRadius: 14))
                 .accessibilityLabel("Flow meter \(Int(engine.flowEnergy * 100)) percent, multiplier \(engine.flowMultiplier)")
 
-                if phase == .active && mode == .touch {
+                if phase == .active && activeSource == .touch {
                     touchPads
                 } else if phase == .active {
                     HStack {
                         Image(systemName: "airpodspro")
-                        Text("Tilt the board: nose up = manual pop · nose down = duck")
+                        Text("Real board pitch controls manual pop and nose-manual duck")
                     }
                     .font(.caption).foregroundStyle(accent)
                     .frame(maxWidth: .infinity).padding(20).panel()
                 }
 
-                if phase != .active {
+                if phase == .armed {
+                    boardArmedPanel
+                } else if phase != .active {
                     resultPanel
                 } else {
                     HStack {
-                        Label(mode == .touch ? "TOUCH / GAMEPAD" : "AIRPODS MOTION",
-                              systemImage: mode == .touch ? "hand.tap.fill" : "waveform.path")
+                        Label(activeSource.rawValue,
+                              systemImage: activeSource == .touch
+                                ? "hand.tap.fill" : "airpodspro")
                         Spacer()
-                        Text("Manual + Nose Manual")
+                        Text(acceptedInput.label)
                     }
-                    .font(.caption2.bold()).foregroundStyle(.white.opacity(0.6))
+                    .font(.caption2.bold()).foregroundStyle(.white.opacity(0.7))
+                    .accessibilityIdentifier("activeRunnerSource")
                 }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
         }
         .scrollBounceBehavior(.basedOnSize)
+    }
+
+    private var liveBoardInGame: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 7) {
+                Image(systemName: "airpodspro")
+                    .foregroundStyle(motionReady ? accent : .orange)
+                Text("REAL BOARD INPUT")
+                    .font(.caption2.weight(.black))
+                    .tracking(1.4)
+                Spacer()
+                Text(motionReady ? "LIVE" : "NO SIGNAL")
+                    .font(.caption2.weight(.black))
+                    .foregroundStyle(motionReady ? accent : .orange)
+                if motionReady {
+                    Text(String(format: "%.0f Hz", store.boardHealth.sampleRateHz))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+            }
+
+            Board3DView(orientation: motionReady ? store.latestOrientation : nil)
+                .frame(height: 136)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .accessibilityIdentifier("liveGameBoard3D")
+
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("NOSE / TAIL").font(.system(size: 9, weight: .bold))
+                        .tracking(1).foregroundStyle(.white.opacity(0.6))
+                    Text(motionReady ? String(format: "%+.1f°", store.gamePitch ?? 0) : "—")
+                        .font(.title3.weight(.black).monospacedDigit())
+                        .foregroundStyle(accent)
+                }
+                Spacer()
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("SIDE TILT").font(.system(size: 9, weight: .bold))
+                        .tracking(1).foregroundStyle(.white.opacity(0.6))
+                    Text(motionReady
+                         ? String(format: "%+.1f°", store.latestOrientation?.rollDegrees ?? 0)
+                         : "—")
+                        .font(.title3.weight(.black).monospacedDigit())
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("GAME ACTION").font(.system(size: 9, weight: .bold))
+                        .tracking(1).foregroundStyle(.white.opacity(0.6))
+                    Text(boardIsUpright ? acceptedInput.label : "NOT UPRIGHT")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(acceptedInput.isActive && boardIsUpright
+                                         ? accent : .orange)
+                }
+            }
+            Text("Lift nose to pop, tail for nose-manual duck. " +
+                 "Tilts over " + String(format: "%.0f°", activationDegrees) +
+                 " trigger controls; the 3D preview follows the actual board quaternion.")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.70))
+        }
+        .padding(13)
+        .background(soft, in: RoundedRectangle(cornerRadius: 18))
+        .accessibilityIdentifier("runnerLiveInputPanel")
+    }
+
+    private var boardArmedPanel: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "airpodspro")
+                .font(.system(size: 32))
+                .foregroundStyle(accent)
+            Text("TILT YOUR BOARD TO DROP IN")
+                .font(.headline.weight(.black))
+                .tracking(0.6)
+                .multilineTextAlignment(.center)
+            Text("Raise the nose or tail at least " +
+                 String(format: "%.0f°", activationDegrees) +
+                 " to start. Distance and score stay at zero until real board movement.")
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.7))
+                .multilineTextAlignment(.center)
+            Button("USE TOUCH CONTROLS INSTEAD") {
+                activeSource = .touch
+                controlModeRaw = RunnerControlMode.touch.rawValue
+                motionAdapter.reset()
+                acceptedInput = RunnerInput()
+                sensorDropped = false
+                lastTick = Date()
+                phase = .active
+            }
+            .buttonStyle(.bordered)
+            .tint(accent)
+            .accessibilityIdentifier("switchToTouch")
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity)
+        .background(soft, in: RoundedRectangle(cornerRadius: 18))
+        .accessibilityIdentifier("runnerAwaitingBoardMovement")
     }
 
     private var touchPads: some View {
@@ -732,7 +930,9 @@ struct ManualRunnerGame: View {
                     Text("Try again from your last checkpoint.")
                         .font(.subheadline).foregroundStyle(.white.opacity(0.7))
                 }
-                Button("RETRY COURSE") { startCourse() }
+                Button("RETRY COURSE") {
+                    startCourse(forceBoard: activeSource == .motion)
+                }
                     .buttonStyle(.borderedProminent).tint(accent)
                     .frame(maxWidth: .infinity)
                 if engine.won,
@@ -740,7 +940,7 @@ struct ManualRunnerGame: View {
                    progress.career.isUnlocked(next) {
                     Button("NEXT STAGE") {
                         selectedLevel = next.id
-                        startCourse()
+                        startCourse(forceBoard: activeSource == .motion)
                     }
                     .buttonStyle(.bordered).tint(accent)
                 }
@@ -761,8 +961,17 @@ struct ManualRunnerGame: View {
                      "Keep your line alive when you're ready.")
                     .font(.subheadline).foregroundStyle(.white.opacity(0.7))
                     .multilineTextAlignment(.center)
+                if sensorDropped && motionReady && activeSource == .motion {
+                    Button("RETRY AIRPODS INPUT") {
+                        sensorDropped = false
+                        resume()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(accent)
+                }
                 Button(sensorDropped ? "SWITCH TO TOUCH" : "RESUME") {
                     if sensorDropped {
+                        activeSource = .touch
                         controlModeRaw = RunnerControlMode.touch.rawValue
                         sensorDropped = false
                     }
@@ -776,16 +985,23 @@ struct ManualRunnerGame: View {
         .background(soft, in: RoundedRectangle(cornerRadius: 22))
     }
 
-    private func startCourse() {
-        guard mode != .motion || motionReady else { return }
+    private func startCourse(forceBoard: Bool = false) {
+        let requested = forceBoard ? RunnerControlMode.motion : mode
+        guard let source = requested.resolvedSource(sensorReady: motionReady) else {
+            return
+        }
+        activeSource = source
         engine.reset(course: selectedLevel)
         page = .run
-        phase = .active
+        // Unlike the old auto-run, AirPod mode waits for real board movement
+        // before advancing distance, scoring, or consuming lives.
+        phase = source == .motion ? .armed : .active
         sensorDropped = false
         manualHeld = false
         noseHeld = false
         queuedManual = false
         accessibleNoseRemaining = 0
+        acceptedInput = RunnerInput()
         motionAdapter.reset()
         lastFeedbackEvent = 0
         lastTick = Date()
@@ -797,40 +1013,60 @@ struct ManualRunnerGame: View {
         noseHeld = false
         queuedManual = false
         accessibleNoseRemaining = 0
+        acceptedInput = RunnerInput()
+        motionAdapter.reset()
     }
 
     private func resume() {
-        guard mode != .motion || motionReady else {
+        guard activeSource != .motion || motionReady else {
             sensorDropped = true
             return
         }
         lastTick = Date()
-        phase = .active
+        sensorDropped = false
+        motionAdapter.reset()
+        acceptedInput = RunnerInput()
+        phase = activeSource == .motion ? .armed : .active
     }
 
     private func tick(_ now: Date) {
-        guard page == .run, phase == .active else { return }
+        guard page == .run && (phase == .active || phase == .armed) else { return }
         let delta = min(0.08, max(0, now.timeIntervalSince(lastTick)))
         lastTick = now
-        if mode == .motion && !motionReady {
+
+        if activeSource == .motion && !motionReady {
             sensorDropped = true
             pause()
             return
         }
-        let gamepad = GCController.controllers().first?.extendedGamepad
-        let micro = GCController.controllers().first?.microGamepad
-        let gamepadManual = gamepad?.buttonA.isPressed == true ||
-            gamepad?.rightTrigger.isPressed == true ||
-            micro?.buttonA.isPressed == true
-        let gamepadNose = gamepad?.buttonB.isPressed == true ||
-            gamepad?.leftTrigger.isPressed == true ||
-            micro?.buttonX.isPressed == true
+
         let input: RunnerInput
-        if mode == .motion {
-            input = motionAdapter.accept(pitch: store.gamePitch)
+        if activeSource == .motion {
+            // Calibrated, current board data, never the phone IMU. Inversion
+            // can display in the 3D preview but cannot trigger a false pop.
+            input = motionAdapter.accept(
+                pitch: store.gamePitch,
+                engagementDegrees: activationDegrees,
+                allowed: boardIsUpright)
         } else {
+            let gamepad = GCController.controllers().first?.extendedGamepad
+            let micro = GCController.controllers().first?.microGamepad
+            let gamepadManual = gamepad?.buttonA.isPressed == true ||
+                gamepad?.rightTrigger.isPressed == true ||
+                micro?.buttonA.isPressed == true
+            let gamepadNose = gamepad?.buttonB.isPressed == true ||
+                gamepad?.leftTrigger.isPressed == true ||
+                micro?.buttonX.isPressed == true
             input = RunnerInput(manual: manualHeld || queuedManual || gamepadManual,
-                                noseManual: noseHeld || accessibleNoseRemaining > 0 || gamepadNose)
+                                noseManual: noseHeld || accessibleNoseRemaining > 0 ||
+                                    gamepadNose)
+        }
+        acceptedInput = input
+
+        if phase == .armed {
+            guard RunnerStartGate.canBegin(source: activeSource, input: input)
+            else { return }
+            phase = .active
         }
         engine.advance(dt: delta, input: input)
         accessibleNoseRemaining = max(0, accessibleNoseRemaining - delta)
@@ -844,7 +1080,7 @@ struct ManualRunnerGame: View {
             manualHeld = false
             noseHeld = false
             if engine.won {
-                progress.recordCompletion(engine, mode: mode)
+                progress.recordCompletion(engine, mode: activeSource.savedRunMode)
             }
         }
     }

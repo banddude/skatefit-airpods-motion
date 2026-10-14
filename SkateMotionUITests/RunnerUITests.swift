@@ -34,6 +34,24 @@ final class RunnerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["TRAINING GOAL"].exists)
     }
 
+    func testGameClearlyShowsMissingBoardAndProvidesCalibrationRoute() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let setup = app.buttons["connectBoardAirPod"]
+        XCTAssertTrue(setup.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["BOARD INPUT NOT ACTIVE"].exists)
+        if !setup.isHittable { app.swipeUp() }
+        XCTAssertTrue(setup.isHittable)
+        setup.tap()
+        XCTAssertTrue(app.staticTexts["Motion Lab"].waitForExistence(timeout: 7))
+        let back = app.buttons.matching(NSPredicate(
+            format: "label CONTAINS[c] %@", "Back to game")).firstMatch
+        XCTAssertTrue(back.exists)
+        back.tap()
+        XCTAssertTrue(app.buttons["openManualBalanceCoach"].waitForExistence(timeout: 7))
+    }
+
     func testDropInPauseResumeAndExit() throws {
         let app = XCUIApplication()
         app.launch()
