@@ -12,6 +12,7 @@ private enum RunnerPage: String, CaseIterable, Identifiable {
     case profile = "Profile"
     case settings = "Settings"
     case run = "Run"
+    case coach = "Balance"
     var id: String { rawValue }
     var icon: String {
         switch self {
@@ -22,6 +23,7 @@ private enum RunnerPage: String, CaseIterable, Identifiable {
         case .profile: return "person.crop.circle"
         case .settings: return "gearshape"
         case .run: return "figure.skating"
+        case .coach: return "scope"
         }
     }
 }
@@ -90,6 +92,20 @@ struct ManualRunnerGame: View {
         VStack(spacing: 0) {
             if page == .run {
                 runScreen
+            } else if page == .coach {
+                VStack(spacing: 0) {
+                    HStack {
+                        Button { page = .play } label: {
+                            Label("Back to SkateFit", systemImage: "chevron.left")
+                                .font(.subheadline.weight(.semibold))
+                                .frame(minHeight: 44)
+                        }
+                        .foregroundStyle(accent)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 18)
+                    ManualBalanceCoachView(store: store, openCalibration: openMotionLab)
+                }
             } else {
                 menuHeader
                 ScrollView {
@@ -101,7 +117,7 @@ struct ManualRunnerGame: View {
                         case .collection: collectionScreen
                         case .profile: profileScreen
                         case .settings: settingsScreen
-                        case .run: EmptyView()
+                        case .run, .coach: EmptyView()
                         }
                     }
                     .padding(.horizontal, 18)
@@ -176,6 +192,36 @@ struct ManualRunnerGame: View {
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.72))
             }
+
+            Button { page = .coach } label: {
+                HStack(alignment: .center, spacing: 14) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 16).fill(accent.opacity(0.17))
+                            .frame(width: 62, height: 68)
+                        Image(systemName: "scope")
+                            .font(.system(size: 30, weight: .bold))
+                            .foregroundStyle(accent)
+                    }
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("START HERE · REAL SKATE TRAINING")
+                            .font(.system(size: 10, weight: .black))
+                            .tracking(1.0).foregroundStyle(accent)
+                        Text("Manual Balance Coach")
+                            .font(.headline.weight(.black))
+                            .foregroundStyle(.white)
+                        Text("Hold time · target angle · wobble · progress")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.72))
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(accent)
+                }
+                .padding(13)
+                .background(soft, in: RoundedRectangle(cornerRadius: 17))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("openManualBalanceCoach")
 
             ZStack(alignment: .bottomLeading) {
                 RunnerSceneView(engine: engine, deckColor: deckColor,

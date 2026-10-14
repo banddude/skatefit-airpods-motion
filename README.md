@@ -1,3 +1,17 @@
+# Manual Balance Coach beta 13: full board orientation and real practice goals
+
+**Latest enrolled-device iPhone beta:** https://skatefit-motion-lab.mikejshaffer.workers.dev/install
+
+**Manual training is now featured first on the home screen.** Mount and calibrate one AirPod (shaky or sideways calibration poses now fail closed), then use the dedicated coach for manual and nose-manual target angle, angle tolerance, balance-hold goals, duration, RMS pitch wobble, sideways tilt, per-axis angular-rate corrections, stability score, haptic milestone feedback, and saved session personal bests. Data is based on calibrated board pose and never claims to prove both feet on deck or grounded wheel contact.
+
+**Full 3D orientation:** SceneKit now receives a calibration-aligned fused quaternion rather than multiple ambiguous Euler rotations. The board can roll all the way through 180° upside-down and 360°, and the app labels wheels-down, edge-on and grip-down. When fused attitude is unavailable or disagrees with measured gravity, a gravity-only orientation fallback is clearly labeled; true flip axis and heading can then be unknown. All gyro/acceleration/gravity axes and the quaternion are still retained in raw CSV.
+
+**Optional GPS speed:** You may explicitly enable foreground Core Location in the coach to display approximate outdoor iPhone travel speed and accuracy. No GPS coordinates/routes are saved or uploaded. GPS cannot show board X/Y/Z or airborne height, and AirPods IMU-only acceleration cannot be integrated into reliable 3D position.
+
+The 15-stage Manual Runner game, offline career saves, telemetry opt-in and separate Motion Lab remain available. See [Spatial Tracking and Manuals](docs/SPATIAL_TRACKING_AND_MANUALS.md) for physics, capability boundaries, camera/optical tracking alternatives and release testing. Real mounted-AirPod hardware behavior, ride coaching scores, and commercial readiness still require independent physical testing.
+
+---
+
 # Manual Runner Beta 12: expanded game and more responsive motion input
 
 **Install beta 12 on the registered test iPhone:** https://skatefit-motion-lab.mikejshaffer.workers.dev/install

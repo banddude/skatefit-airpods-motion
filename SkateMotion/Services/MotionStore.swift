@@ -73,6 +73,17 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     /// diagnostics UI update cadence. Never substitutes phone motion.
     @Published private(set) var gamePitch: Double?
     @Published private(set) var latestOrientation: BoardOrientation?
+    @Published private(set) var balance = ManualBalanceSnapshot()
+    @Published private(set) var savedManualPractices: [SavedManualPractice] = []
+    @Published var balanceSettings: ManualBalanceSettings = .init() {
+        didSet {
+            balanceSettings = balanceSettings.validated
+            tracker.configure(balanceSettings)
+            if let data = try? JSONEncoder().encode(balanceSettings) {
+                UserDefaults.standard.set(data, forKey: Self.balanceSettingsKey)
+            }
+        }
+    }
     @Published private(set) var latestBoardAcceleration: Vector3?
     @Published private(set) var latestBoardRotationRate: Vector3?
     @Published private(set) var liveStatistics = SessionStatistics()
@@ -87,6 +98,10 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     private let phone = CMMotionManager()
     private let cloud = TelemetryUploader()
     private let archive = SessionArchive()
+    private let balanceHistory = ManualPracticeHistory()
+    private static let balanceSettingsKey = "skatefitManualBalance.settingsV1"
+    private var tracker = ManualBalanceTracker()
+    private var lastBalanceUIUpdate = 0.0
     private let audioWake = AirPodAudioWake()
     private var subscriptions = Set<AnyCancellable>()
     private let queue: OperationQueue = {
@@ -101,6 +116,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     private var detector = TrickDetector()
     private var calibrationGravities: [Vector3] = []
     private var calibrationLastAttitude: Quaternion4?
+    private var calibrationLastSampleTime: TimeInterval?
     private var calibrationStart: TimeInterval?
     private var calibrationRequestedAt: TimeInterval?
     private var lastHeadphoneReadingAt: TimeInterval?
@@ -141,6 +157,12 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     override init() {
         super.init()
         savedSessions = archive.history
+        savedManualPractices = balanceHistory.sessions
+        if let data = UserDefaults.standard.data(forKey: Self.balanceSettingsKey),
+           let saved = try? JSONDecoder().decode(ManualBalanceSettings.self, from: data) {
+            balanceSettings = saved.validated
+        }
+        tracker.configure(balanceSettings)
         if let saved = UserDefaults.standard.string(forKey: Self.boardSideKey),
            let savedSide = HeadphoneSide(rawValue: saved) {
             boardSide = savedSide
@@ -226,7 +248,14 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         calibrationRequestedAt = nil
         calibrationProgress = 0
         calibrationGravities.removeAll()
+        calibrationLastSampleTime = nil
         stagePendingTelemetry()
+        tracker.finish()
+        balance = tracker.snapshot
+        if !isSyntheticDemo && balance.measuredSamples > 0 {
+            balanceHistory.append(tracker.savedRecord(sessionID: sessionId))
+            savedManualPractices = balanceHistory.sessions
+        }
         do {
             if let summary = try archive.finish(calibrated: calibration.isPhysicallyPlausible) {
                 exportedFile = archive.fileURL(for: summary)
@@ -252,9 +281,13 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         calibrationStart = nil
         calibrationRequestedAt = nil
         calibrationGravities = []
+        calibrationLastSampleTime = nil
         calibrationLastAttitude = nil
         calibrationProgress = 0
         latestPitch = nil
+        tracker.reset()
+        balance = tracker.snapshot
+        lastBalanceUIUpdate = 0
         gamePitch = nil
         lastGamePitchAt = nil
         latestOrientation = nil
@@ -286,6 +319,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         calibrationRequestedAt = ProcessInfo.processInfo.systemUptime
         calibrationProgress = 0
         calibrationGravities = []
+        calibrationLastSampleTime = nil
         calibrationLastAttitude = nil
         status = "Hold \(pose.rawValue.lowercased()) steady for about 1.5 seconds."
     }
@@ -371,6 +405,8 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
             calibrationStart = nil
             calibrationRequestedAt = nil
             calibrationGravities = []
+            calibrationLastSampleTime = nil
+            calibrationLastAttitude = nil
             calibrationProgress = 0
             status = "Calibration timed out: no continuous board AirPod motion. Check the AirPod source and tap Retry AirPods."
         }
@@ -481,27 +517,50 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         let motionOrientation = calibration.orientation(for: sample)
 
         if let pose = calibrationPose {
-            if calibrationStart == nil { calibrationStart = sample.hostUptime }
-            calibrationGravities.append(sample.gravity)
-            calibrationLastAttitude = sample.quaternion
-            if let start = calibrationStart {
-                calibrationProgress = min(1, max(0, (sample.hostUptime - start) / 1.5))
-            }
-            if let start = calibrationStart, sample.hostUptime - start >= 1.5 {
-                let total = calibrationGravities.reduce(Vector3.zero, +)
-                let mean = total * (1.0 / Double(calibrationGravities.count))
-                calibration.set(pose, gravity: mean,
-                                attitude: calibrationLastAttitude)
-                calibrationLastAttitude = nil
-                calibrationPose = nil
+            // Timeout only when samples STOP, not while a skater is finding
+            // a sufficiently steady calibration position.
+            calibrationRequestedAt = sample.hostUptime
+            let continuous = calibrationLastSampleTime.map {
+                sample.hostUptime > $0 && sample.hostUptime - $0 < 0.20
+            } ?? true
+            if !CalibrationCaptureQuality.accepts(sample) || !continuous {
+                if calibrationStart != nil {
+                    status = "Board moved during calibration. Hold the pose still; the timer has restarted."
+                }
                 calibrationStart = nil
-                calibrationRequestedAt = nil
+                calibrationLastSampleTime = nil
+                calibrationGravities.removeAll(keepingCapacity: true)
+                calibrationLastAttitude = nil
                 calibrationProgress = 0
-                calibrationGravities = []
-                detector.reset()
-                status = calibration.isComplete && !calibration.isPhysicallyPlausible
-                    ? "Pose references conflict. Recalibrate all three with a rigid mount."
-                    : "Saved \(pose.rawValue). \(calibration.poses.count)/3 positions captured."
+            } else {
+                if calibrationStart == nil { calibrationStart = sample.hostUptime }
+                calibrationLastSampleTime = sample.hostUptime
+                calibrationGravities.append(sample.gravity)
+                calibrationLastAttitude = sample.quaternion
+                if let start = calibrationStart {
+                    calibrationProgress = min(1, max(0, (sample.hostUptime - start) /
+                        CalibrationCaptureQuality.requiredHoldSeconds))
+                }
+                if let start = calibrationStart,
+                   sample.hostUptime - start >= CalibrationCaptureQuality.requiredHoldSeconds {
+                    if let stableGravity = CalibrationCaptureQuality.stableMean(calibrationGravities) {
+                        calibration.set(pose, gravity: stableGravity,
+                                        attitude: calibrationLastAttitude)
+                        calibrationPose = nil
+                        calibrationRequestedAt = nil
+                        detector.reset()
+                        status = calibration.isComplete && !calibration.isPhysicallyPlausible
+                            ? "Calibration poses conflict. Recalibrate with a rigidly mounted AirPod."
+                            : "Saved \(pose.rawValue). \(calibration.poses.count)/3 stable positions captured."
+                    } else {
+                        status = "Gravity varied too much. Hold the pose steady and try again."
+                    }
+                    calibrationStart = nil
+                    calibrationLastSampleTime = nil
+                    calibrationLastAttitude = nil
+                    calibrationProgress = 0
+                    calibrationGravities.removeAll(keepingCapacity: true)
+                }
             }
         } else if calibration.isPhysicallyPlausible {
             let detected = detector.accept(sample, calibration: calibration)
@@ -512,9 +571,20 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
 
         saveSample(sample, isBoard: true, orientation: motionOrientation)
 
+        if calibrationPose == nil && calibration.isPhysicallyPlausible {
+            tracker.accept(sample, orientation: motionOrientation,
+                           calibration: calibration)
+            if sample.hostUptime - lastBalanceUIUpdate >= 1.0 / 15.0 {
+                balance = tracker.snapshot
+                lastBalanceUIUpdate = sample.hostUptime
+            }
+        }
         if calibration.isPhysicallyPlausible && motionOrientation != nil &&
            sample.hostUptime - lastGamePitchUpdate >= 1.0 / 30.0 {
-            gamePitch = motionOrientation?.pitchDegrees
+            // An inverted/edge-on board is not an ordinary manual.
+            gamePitch = (motionOrientation?.upAlignment ?? 0) > 0.45
+                ? motionOrientation?.pitchDegrees : 0
+            latestOrientation = motionOrientation
             lastGamePitchAt = sample.hostUptime
             lastGamePitchUpdate = sample.hostUptime
         }
@@ -553,10 +623,17 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         lastHeadphoneReadingAt = nil
         headphoneDetectedSide = "none"
         calibrationRequestedAt = nil
+        calibrationLastSampleTime = nil
+        calibrationLastAttitude = nil
+        calibrationStart = nil
+        calibrationGravities = []
         calibrationProgress = 0
         phoneSampleCount = 0
         rejectedHeadphoneCount = 0
         latestPitch = nil
+        tracker.reset()
+        balance = tracker.snapshot
+        lastBalanceUIUpdate = 0
         gamePitch = nil
         lastGamePitchAt = nil
         latestOrientation = nil

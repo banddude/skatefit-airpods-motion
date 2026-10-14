@@ -24,16 +24,14 @@ struct Board3DView: UIViewRepresentable {
         guard let root = view.scene?.rootNode.childNode(
             withName: "boardRoot", recursively: false) else { return }
 
-        let pitch = Float((orientation?.pitchDegrees ?? 0) * .pi / 180)
-        let roll = Float((orientation?.rollDegrees ?? 0) * .pi / 180)
-        let yaw = Float((orientation?.yawDegrees ?? 0) * .pi / 180)
-
-        // +pitch tips the nose along +X up; roll flips around board length;
-        // yaw rotates in the horizontal plane. Relative yaw may drift.
-        let qPitch = simd_quatf(angle: pitch, axis: SIMD3<Float>(0, 0, 1))
-        let qRoll = simd_quatf(angle: roll, axis: SIMD3<Float>(1, 0, 0))
-        let qYaw = simd_quatf(angle: yaw, axis: SIMD3<Float>(0, 1, 0))
-        root.simdOrientation = qYaw * qPitch * qRoll
+        if let q = orientation?.relativeQuaternion?.unit {
+            // Relative quaternion uses the calibrated board basis,
+            // retaining full rotation even across an upside-down flip.
+            root.simdOrientation = simd_quatf(real: Float(q.w),
+                imag: SIMD3<Float>(Float(q.x), Float(q.y), Float(q.z)))
+        } else {
+            root.simdOrientation = simd_quatf(real: 1, imag: SIMD3(0, 0, 0))
+        }
     }
 
     private static func material(_ color: UIColor, roughness: CGFloat = 0.8) -> SCNMaterial {
@@ -158,9 +156,17 @@ struct Board3DCard: View {
                 axisMetric("Yaw", orientation?.headingAvailable == true
                            ? value(orientation?.yawDegrees) : "—")
             }
-            Text(orientation?.headingAvailable == true
-                 ? "Yaw is relative to the flat calibration pose. Heading can drift."
-                 : "Calibrate flat, tail and nose to activate all three axes.")
+            HStack {
+                Label(orientation?.deckFace ?? "Awaiting calibration",
+                      systemImage: orientation?.isInverted == true
+                        ? "arrow.down.circle.fill" : "rotate.3d")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(orientation?.isInverted == true ? .orange : .teal)
+                Spacer()
+            }
+            Text(orientation?.fullAttitudeAvailable == true
+                 ? "All-axis rotation, including flips. Yaw is relative and can drift. Translation and height are unknown."
+                 : "Gravity-only tilt estimate: twist direction and yaw are not fully observable. Translation and height are unknown.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

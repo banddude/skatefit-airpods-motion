@@ -48,6 +48,19 @@ struct Quaternion4: Codable, Equatable {
 
     static let identity = Quaternion4(w: 1, x: 0, y: 0, z: 0)
 
+    var isValid: Bool {
+        let values = [w, x, y, z]
+        return values.allSatisfy(\.isFinite) &&
+            values.reduce(0) { $0 + $1 * $1 } > 1e-12
+    }
+
+    var unit: Quaternion4? {
+        guard isValid else { return nil }
+        let magnitude = sqrt(w * w + x * x + y * y + z * z)
+        return Quaternion4(w: w / magnitude, x: x / magnitude,
+                           y: y / magnitude, z: z / magnitude)
+    }
+
     func rotate(_ vector: Vector3) -> Vector3 {
         let length = sqrt(w*w + x*x + y*y + z*z)
         guard length > 1e-10 else { return vector }
