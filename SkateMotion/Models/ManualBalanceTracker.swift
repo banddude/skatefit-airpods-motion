@@ -51,6 +51,7 @@ struct ManualBalanceSnapshot: Equatable {
     var currentGoalAchieved = false
     var isInverted = false
     var hasPose = false
+    var lastCompletedHold: ManualHoldAttempt?
 }
 
 struct SavedManualPractice: Codable, Identifiable, Equatable {
@@ -64,177 +65,202 @@ struct SavedManualPractice: Codable, Identifiable, Equatable {
     let goalsReached: Int
     let averageStability: Double
     let upsideDownSamples: Int
+    var attempts: [ManualHoldAttempt]? = nil
+
+    var qualifiedHolds: [ManualHoldAttempt] { attempts ?? [] }
 }
 
 struct ManualBalanceTracker {
     private(set) var snapshot = ManualBalanceSnapshot()
     private(set) var settings: ManualBalanceSettings = .init()
+    private(set) var attempts: [ManualHoldAttempt] = []
 
     private var activeSide: ManualSide?
-    private var lastUptime: TimeInterval?
-    private var lastGoodUptime: TimeInterval?
-    private var currentQualitySum = 0.0
-    private var currentQualityCount = 0
-    private var currentMeanTilt = 0.0
-    private var currentTiltM2 = 0.0
+    private var lastHostUptime: TimeInterval?
+    private var lastDeviceTimestamp: TimeInterval?
+    private var lastQualifiedHostUptime: TimeInterval?
+    private var qualitySum = 0.0
+    private var qualityCount = 0
+    private var meanTilt = 0.0
+    private var tiltM2 = 0.0
+    private var sideTiltSum = 0.0
+    private var currentGoal: ManualBalanceSettings = .init()
     private var countedAttempt = false
     private var goalRecorded = false
     private var completedQualitySum = 0.0
     private var completedQualityCount = 0
     private var wasInverted = false
 
-    mutating func configure(_ newSettings: ManualBalanceSettings) {
-        settings = newSettings.validated
+    mutating func configure(_ value: ManualBalanceSettings) {
+        let newSettings = value.validated
+        if settings != newSettings { settle(.settingsChanged) }
+        settings = newSettings
     }
 
     mutating func reset() {
-        let oldSettings = settings
+        let retainedSettings = settings
         self = ManualBalanceTracker()
-        settings = oldSettings
+        settings = retainedSettings
+    }
+
+    mutating func interrupt() {
+        settle(.sensorGap)
+        lastHostUptime = nil
+        lastDeviceTimestamp = nil
+        snapshot.status = "SENSOR STREAM INTERRUPTED"
+        snapshot.coach = "Reconnect the board AirPod. No disconnected time is counted."
     }
 
     mutating func finish() {
-        settle()
-        snapshot.currentHoldSeconds = 0
-        snapshot.side = nil
+        settle(.sessionEnded)
     }
 
-    mutating func accept(_ sample: MotionSample,
-                         orientation: BoardOrientation?,
+    mutating func accept(_ sample: MotionSample, orientation: BoardOrientation?,
                          calibration: BoardCalibration) {
-        // Reject iPhone and nonmounted earbud motion here even if a caller
-        // accidentally routes them to this training algorithm.
+        // Phone motion and any other AirPod cannot count as board practice.
         guard sample.source == .headphone || sample.source == .simulation,
-              sample.hostUptime.isFinite, calibration.isPhysicallyPlausible,
-              let orientation,
-              orientation.pitchDegrees.isFinite,
-              orientation.rollDegrees.isFinite else { return }
+              calibration.isPhysicallyPlausible else { return }
 
-        let t = sample.hostUptime
-        let dt = lastUptime.map { t - $0 }
-        guard dt == nil || (dt! > 0 && dt! < 0.50) else {
-            settle()
-            lastUptime = t
-            snapshot.status = "Sensor gap"
-            snapshot.coach = "Keep the AirPod connected. The last hold was ended."
+        guard let pose = orientation, [pose.pitchDegrees, pose.rollDegrees,
+              pose.upAlignment, sample.hostUptime, sample.deviceTimestamp,
+              sample.gravity.x, sample.gravity.y, sample.gravity.z,
+              sample.acceleration.x, sample.acceleration.y, sample.acceleration.z,
+              sample.rotationRate.x, sample.rotationRate.y, sample.rotationRate.z]
+              .allSatisfy(\.isFinite),
+              sample.hostUptime >= 0, sample.deviceTimestamp >= 0 else {
+            settle(.invalidSensor)
+            snapshot.status = "INVALID SENSOR DATA"
+            snapshot.coach = "Invalid measurements are not included in manual timing."
             return
         }
-        lastUptime = t
-        if let interval = dt, interval > 0 && interval < 0.2 {
-            let instantHz = min(120, 1 / interval)
+
+        let t = sample.hostUptime
+        var interval = 0.0
+        if let lastHost = lastHostUptime {
+            let arrivalInterval = t - lastHost
+            if arrivalInterval <= 0 || arrivalInterval > 0.20 {
+                settle(.sensorGap)
+            } else if sample.deviceTimestamp > 0,
+                      let previous = lastDeviceTimestamp, previous > 0 {
+                let deviceInterval = sample.deviceTimestamp - previous
+                if deviceInterval <= 0 || deviceInterval > 0.20 {
+                    settle(.sensorGap)
+                } else {
+                    interval = deviceInterval
+                }
+            } else {
+                interval = arrivalInterval
+            }
+        }
+        lastHostUptime = t
+        lastDeviceTimestamp = sample.deviceTimestamp > 0
+            ? sample.deviceTimestamp : nil
+        if interval > 0 && interval < 0.18 {
+            let newRate = min(150, 1 / interval)
             snapshot.sampleRateHz = snapshot.sampleRateHz == 0
-                ? instantHz : snapshot.sampleRateHz * 0.9 + instantHz * 0.1
+                ? newRate : snapshot.sampleRateHz * 0.88 + newRate * 0.12
         }
 
         snapshot.hasPose = true
         snapshot.measuredSamples += 1
-        snapshot.pitchDegrees = orientation.pitchDegrees
-        snapshot.rollDegrees = orientation.rollDegrees
-        snapshot.relativeYawDegrees = orientation.yawDegrees
-        snapshot.isInverted = orientation.isInverted
-        if orientation.isInverted && !wasInverted {
+        snapshot.pitchDegrees = pose.pitchDegrees
+        snapshot.rollDegrees = pose.rollDegrees
+        snapshot.relativeYawDegrees = pose.yawDegrees
+        snapshot.isInverted = pose.isInverted
+        if pose.isInverted && !wasInverted {
             snapshot.inversionObservations += 1
         }
-        wasInverted = orientation.isInverted
+        wasInverted = pose.isInverted
 
-        guard !orientation.isInverted && !orientation.isOnEdge else {
-            settle()
-            snapshot.status = orientation.isInverted ? "BOARD UPSIDE DOWN" : "BOARD ON EDGE"
-            snapshot.coach = "Re-level the deck before working on manuals."
+        if pose.isInverted || pose.isOnEdge {
+            settle(.inverted)
+            snapshot.status = pose.isInverted ? "BOARD UPSIDE DOWN" : "BOARD ON EDGE"
+            snapshot.coach = "Bring the deck back toward level before continuing."
             return
         }
-        let rotation = sample.rotationRate
-        let rate = rotation.magnitude * 180 / Double.pi
-        let longitudinal = calibration.lengthAxis ?? .zero
-        let transverse = calibration.widthAxis ?? .zero
-        let normal = calibration.flatGravity ?? .zero
-        let pitchRate = abs(rotation.dot(transverse)) * 180 / Double.pi
-        let rollRate = abs(rotation.dot(longitudinal)) * 180 / Double.pi
-        let yawRate = abs(rotation.dot(normal)) * 180 / Double.pi
-        let userAcceleration = sample.acceleration.magnitude
-        snapshot.angularSpeedDegreesPerSecond = rate
+
+        let gyro = sample.rotationRate
+        let pitchRate = abs(gyro.dot(calibration.widthAxis ?? .zero)) * 180 / .pi
+        let rollRate = abs(gyro.dot(calibration.lengthAxis ?? .zero)) * 180 / .pi
+        let yawRate = abs(gyro.dot(calibration.flatGravity ?? .zero)) * 180 / .pi
+        let acceleration = sample.acceleration.magnitude
         snapshot.pitchRateDegreesPerSecond = pitchRate
         snapshot.rollRateDegreesPerSecond = rollRate
         snapshot.yawRateDegreesPerSecond = yawRate
-        snapshot.userAccelerationG = userAcceleration
-        let pitch = orientation.pitchDegrees
-        let tilt = abs(pitch)
-        let sideways = abs(orientation.rollDegrees)
-        let side: ManualSide = pitch > 0 ? .manual : .noseManual
+        snapshot.angularSpeedDegreesPerSecond = gyro.magnitude * 180 / .pi
+        snapshot.userAccelerationG = acceleration
+
+        let tilt = abs(pose.pitchDegrees)
+        let lateral = abs(pose.rollDegrees)
+        let side: ManualSide = pose.pitchDegrees > 0 ? .manual : .noseManual
         let target = settings.targetAngleDegrees
         let minimum = max(5, target - settings.toleranceDegrees)
-        let maximum = min(calibration.manualUpperLimit, target + settings.toleranceDegrees)
-        let stable = sideways <= 12 && pitchRate <= 125 && rollRate <= 125 &&
-            userAcceleration <= 2.5
-        let inRange = tilt >= minimum && tilt <= maximum && stable
-        // Pitch error is separate from actual wobble. Roll and pitch gyros
-        // penalize balance corrections more strongly than intentional yaw.
-        let quality = max(0, min(100,
-            100 - abs(tilt - target) * 5.8 - sideways * 2.8 -
-            pitchRate * 0.12 - rollRate * 0.17 - yawRate * 0.035 -
-            max(0, userAcceleration - 0.15) * 6))
-        snapshot.stability = snapshot.stability == 0
-            ? quality : snapshot.stability * 0.78 + quality * 0.22
+        let maximum = min(calibration.manualUpperLimit,
+                          target + settings.toleranceDegrees)
+        let steady = lateral <= 12 && pitchRate <= 125 &&
+            rollRate <= 125 && acceleration <= 2.5
+        let qualifies = tilt >= minimum && tilt <= maximum && steady
 
-        if !inRange {
-            if activeSide != nil && t - (lastGoodUptime ?? t) > 0.12 { settle() }
-            if sideways > 12 {
-                snapshot.status = "SIDEWAYS TILT"
-                snapshot.coach = "Keep the deck level left-to-right."
-            } else if pitchRate > 125 || rollRate > 125 ||
-                      userAcceleration > 2.5 {
-                snapshot.status = "TOO MUCH MOVEMENT"
-                snapshot.coach = "Settle your balance before measuring a hold."
+        let score = max(0, min(100,
+            100 - abs(tilt - target) * 5.8 - lateral * 2.8 -
+            pitchRate * 0.12 - rollRate * 0.17 - yawRate * 0.035 -
+            max(0, acceleration - 0.15) * 6))
+        snapshot.stability = snapshot.measuredSamples <= 1
+            ? score : snapshot.stability * 0.78 + score * 0.22
+
+        guard qualifies else {
+            let reason: ManualHoldEndReason
+            if lateral > 12 {
+                reason = .sideways
+                snapshot.coach = "Keep the deck level from side to side."
+            } else if !steady {
+                reason = .tooFast
+                snapshot.coach = "Make slower, smaller balance corrections."
             } else if tilt < minimum {
-                snapshot.status = "TOO FLAT"
-                snapshot.coach = "Raise the nose for a manual or the tail for a nose manual."
+                reason = .returnedFlat
+                snapshot.coach = "Lift the nose or tail into your target zone."
             } else {
-                snapshot.status = "TOO HIGH"
-                snapshot.coach = "Lower the lifted end slightly toward the target angle."
+                reason = .angleTooHigh
+                snapshot.coach = "Lower the raised end slightly."
             }
+            settle(reason) // Strict: never bridge a flat or unstable frame.
+            snapshot.status = reason.rawValue.uppercased()
             return
         }
 
         if activeSide != side {
-            settle()
+            settle(.changedDirection)
             activeSide = side
+            currentGoal = settings
+            qualitySum = 0
+            qualityCount = 0
+            meanTilt = 0
+            tiltM2 = 0
+            sideTiltSum = 0
+            countedAttempt = false
+            goalRecorded = false
             snapshot.side = side
-            snapshot.currentHoldSeconds = 0
-            currentQualitySum = 0
-            currentQualityCount = 0
-            currentMeanTilt = 0
-            currentTiltM2 = 0
-            countedAttempt = false
-            goalRecorded = false
         }
-        // Only count adjacent qualified samples, never time spent flat,
-        // inverted, in a different balance direction, or sensor-disconnected.
-        let acceptedDt: Double
-        if let lastGood = lastGoodUptime, t - lastGood > 0,
-           t - lastGood <= 0.12 {
-            acceptedDt = t - lastGood
-        } else {
-            acceptedDt = 0
-            snapshot.currentHoldSeconds = 0
-            currentQualitySum = 0
-            currentQualityCount = 0
-            currentMeanTilt = 0
-            currentTiltM2 = 0
-            countedAttempt = false
-            goalRecorded = false
-        }
-        lastGoodUptime = t
-        snapshot.currentHoldSeconds += acceptedDt
-        currentQualitySum += quality
-        currentQualityCount += 1
-        let difference = tilt - currentMeanTilt
-        currentMeanTilt += difference / Double(currentQualityCount)
-        currentTiltM2 += difference * (tilt - currentMeanTilt)
-        snapshot.wobbleRMSE = sqrt(max(0, currentTiltM2) / Double(currentQualityCount))
-        snapshot.averageHoldStability = currentQualitySum / Double(currentQualityCount)
+
+        // Monotonic AirPod device time is preferred over jittery Bluetooth
+        // callback arrivals; a receipt gap still stops the hold above.
+        let qualifiedInterval = lastQualifiedHostUptime != nil &&
+            interval > 0 && interval <= 0.12 ? interval : 0
+        lastQualifiedHostUptime = t
+        snapshot.currentHoldSeconds += qualifiedInterval
+        qualitySum += score
+        qualityCount += 1
+        sideTiltSum += lateral
+        let difference = tilt - meanTilt
+        meanTilt += difference / Double(qualityCount)
+        tiltM2 += difference * (tilt - meanTilt)
+        snapshot.wobbleRMSE = sqrt(max(0, tiltM2) / Double(qualityCount))
+        snapshot.averageHoldStability = qualitySum / Double(qualityCount)
+        snapshot.side = side
         snapshot.status = side.rawValue.uppercased()
-        snapshot.coach = quality >= 78 ? "Smooth balance. Keep holding!" :
-            "Small, controlled corrections. Aim for \(Int(target))°."
+        snapshot.coach = score >= 78
+            ? "Smooth balance. Keep holding."
+            : "Make small corrections toward \(Int(target))°."
 
         if !countedAttempt && snapshot.currentHoldSeconds >= 0.35 {
             countedAttempt = true
@@ -248,24 +274,43 @@ struct ManualBalanceTracker {
             snapshot.longestNoseManualSeconds = max(
                 snapshot.longestNoseManualSeconds, snapshot.currentHoldSeconds)
         }
-        if !goalRecorded && snapshot.currentHoldSeconds >= settings.goalSeconds {
+        if !goalRecorded && snapshot.currentHoldSeconds >= currentGoal.goalSeconds {
             snapshot.completedGoals += 1
             goalRecorded = true
         }
         snapshot.currentGoalAchieved = goalRecorded
     }
 
-    private mutating func settle() {
-        guard activeSide != nil else { return }
-        if countedAttempt && currentQualityCount > 0 {
-            completedQualitySum += currentQualitySum / Double(currentQualityCount)
-            completedQualityCount += 1
+    private mutating func settle(_ reason: ManualHoldEndReason) {
+        guard let activeSide else {
+            lastQualifiedHostUptime = nil
+            return
         }
-        activeSide = nil
-        lastGoodUptime = nil
+        if countedAttempt && qualityCount > 0 {
+            let hold = ManualHoldAttempt(
+                id: UUID(), side: activeSide,
+                seconds: snapshot.currentHoldSeconds,
+                averageAngleDegrees: meanTilt,
+                wobbleRMSDegrees: sqrt(max(0, tiltM2) / Double(qualityCount)),
+                averageSideTiltDegrees: sideTiltSum / Double(qualityCount),
+                averageStability: qualitySum / Double(qualityCount),
+                targetAngleDegrees: currentGoal.targetAngleDegrees,
+                targetSeconds: currentGoal.goalSeconds,
+                reachedGoal: goalRecorded,
+                endedBy: reason)
+            attempts.append(hold)
+            snapshot.lastCompletedHold = hold
+            completedQualitySum += hold.averageStability
+            completedQualityCount += 1
+            snapshot.averageHoldStability = completedQualitySum /
+                Double(completedQualityCount)
+        }
+        self.activeSide = nil
+        lastQualifiedHostUptime = nil
         snapshot.side = nil
         snapshot.currentHoldSeconds = 0
         snapshot.currentGoalAchieved = false
+        snapshot.wobbleRMSE = 0
         countedAttempt = false
         goalRecorded = false
     }
@@ -281,7 +326,8 @@ struct ManualBalanceTracker {
             averageStability: completedQualityCount > 0
                 ? completedQualitySum / Double(completedQualityCount)
                 : snapshot.averageHoldStability,
-            upsideDownSamples: snapshot.inversionObservations)
+            upsideDownSamples: snapshot.inversionObservations,
+            attempts: attempts)
     }
 }
 

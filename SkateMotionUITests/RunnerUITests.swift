@@ -23,27 +23,15 @@ final class RunnerUITests: XCTestCase {
         XCTAssertTrue(app.buttons["openManualBalanceCoach"].waitForExistence(timeout: 5))
     }
 
-    func testOpticalMarkerLabIsOptInAndPrintResourceAvailable() throws {
+    func testManualCoachUsesSensorsAndNoCameraActions() throws {
         let app = XCUIApplication()
         app.launch()
         let coach = app.buttons["openManualBalanceCoach"]
         XCTAssertTrue(coach.waitForExistence(timeout: 15))
         coach.tap()
-
-        let lab = app.buttons["openBoardSpaceLab"]
-        XCTAssertTrue(lab.waitForExistence(timeout: 7))
-        lab.tap()
-
-        XCTAssertTrue(app.staticTexts["BOARD SPACE LAB"].waitForExistence(timeout: 7))
-        XCTAssertTrue(app.staticTexts["CAMERA OFF"].exists)
-        XCTAssertTrue(app.buttons["shareOpticalMarker"].exists)
-        XCTAssertTrue(app.buttons["toggleOpticalCamera"].exists)
-        // Navigating here must not itself open the camera or request camera permission.
-        let back = app.buttons.matching(NSPredicate(
-            format: "label CONTAINS[c] %@", "Back to manual coach")).firstMatch
-        XCTAssertTrue(back.exists)
-        back.tap()
         XCTAssertTrue(app.staticTexts["MANUAL BALANCE"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["openBoardSpaceLab"].exists)
+        XCTAssertTrue(app.staticTexts["TRAINING GOAL"].exists)
     }
 
     func testDropInPauseResumeAndExit() throws {

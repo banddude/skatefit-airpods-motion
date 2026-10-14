@@ -22,6 +22,6 @@ Before App Store release:
 This is an inventory, not a substitute for legal review.
 
 
-## Beta 14 original optical marker
+## Beta 15 sensor-only assets
 
-The printed reference PNG and full-size PDF are original procedurally drawn assets created by tools/generate_board_marker.py. They use deterministic shapes, dots and typography under the repository's MIT license, with no external photos or art. The marker size must be exactly 120 mm in actual physical printing.
+The camera marker, printer PDF and camera modules were removed. The 3D board is original SceneKit geometry, not an external licensed model.

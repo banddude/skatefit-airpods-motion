@@ -3,9 +3,9 @@
 ## Product promise
 A complete 2.5D platform adventure with a real skateboarding motion controller, optional touch controls, and a polished game that remains fun without an AirPod. Keep the actual game separate from the AirPod diagnostics and motion lab.
 
-## Beta 14: optical board-position experiment
+## Beta 15: AirPod-only practice integrity
 
-The opt-in Board Space Camera Lab measures a *printed marker's* camera-relative X/Y/Z and orientation using ARKit only while the marker is visible. A static iPhone and accurately printed 120 mm marker are required. Zeroing a flat board makes relative movement measurable; it does not validate wheel contact, absolute board centre, or jump height. See [spatial tracking](SPATIAL_TRACKING_AND_MANUALS.md).
+Camera tracking is deliberately excluded. Board-mounted AirPod readings now pass source, sample freshness and integrity checks before contributing to qualified manual and nose-manual holds. The trainer retains each hold's stability, duration, mean tilt, wobble, goal and end reason. Suggested training steps use local personal bests; absolute board XYZ remains unavailable without independently specified hardware.
 
 ## Beta 13: manual-first skill development
 
