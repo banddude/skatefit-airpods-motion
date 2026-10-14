@@ -54,3 +54,32 @@ test("signed beta binary and icon stream through R2 over GET and HEAD", async ()
   }
   assert.deepEqual(calls, ["ios/SkateFitMotionLab-0.1.0-1.ipa", "ios/SkateFitMotionLab-0.1.0-1.ipa"]);
 });
+
+test("iOS partial downloads honor byte ranges and reject invalid requests", async () => {
+  const bytes = new Uint8Array([10,20,30,40]);
+  const env = {
+    BETAS: {
+      async get(key, options) {
+        const data = options?.range
+          ? bytes.slice(options.range.offset,
+                        options.range.offset + options.range.length)
+          : bytes;
+        return {
+          size: bytes.byteLength,
+          writeHttpMetadata(h) { h.set("content-type","application/octet-stream"); },
+          body: new ReadableStream({start(c) {c.enqueue(data);c.close();}})
+        };
+      }
+    }
+  };
+  const ok = await app.fetch(new Request("https://example.test/beta/SkateFitMotionLab.ipa",{
+    headers: {"Range":"bytes=1-2"}
+  }), env);
+  assert.equal(ok.status,206);
+  assert.equal(ok.headers.get("content-range"),"bytes 1-2/4");
+  assert.deepEqual([...new Uint8Array(await ok.arrayBuffer())],[20,30]);
+  const rejected = await app.fetch(new Request("https://example.test/beta/SkateFitMotionLab.ipa",{
+    headers: {"Range":"bytes=8-12"}
+  }), env);
+  assert.equal(rejected.status,416);
+});

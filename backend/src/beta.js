@@ -5,14 +5,42 @@ const objects = Object.freeze({ipa:"ios/SkateFitMotionLab-0.1.0-1.ipa", icon:"io
 export async function getBetaAsset(request, env, kind) {
   const key = objects[kind];
   if (!key || !env.BETAS) return new Response("Beta storage unavailable", {status: 503});
-  const object = await env.BETAS.get(key);
-  if (!object) return new Response("Beta asset not found", {status: 404});
+  // Initial metadata request avoids guessing object size when honoring Range.
+  const original = await env.BETAS.get(key);
+  if (!original) return new Response("Beta asset not found", {status: 404});
+  let object = original;
+  let responseStatus = 200;
+  let bytes = original.size;
+  let contentRange = null;
+  const rangeHeader = request.headers.get("range");
+  if (rangeHeader && request.method === "GET") {
+    const match = /^bytes=(\d+)-(\d*)$/.exec(rangeHeader);
+    if (!match) return new Response(null, {
+      status: 416, headers: {"content-range": "bytes */" + original.size}
+    });
+    const start = Number(match[1]);
+    const end = match[2] === "" ? original.size - 1 : Number(match[2]);
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) ||
+        start >= original.size || end < start || end >= original.size) {
+      return new Response(null, {
+        status: 416, headers: {"content-range": "bytes */" + original.size}
+      });
+    }
+    bytes = end - start + 1;
+    object = await env.BETAS.get(key, {range: {offset: start, length: bytes}});
+    if (!object) return new Response("Beta asset not found", {status: 404});
+    responseStatus = 206;
+    contentRange = "bytes " + start + "-" + end + "/" + original.size;
+  }
   const headers = new Headers();
-  object.writeHttpMetadata(headers);
+  original.writeHttpMetadata(headers);
   headers.set("content-type", kind === "ipa" ? "application/octet-stream" : "image/png");
-  headers.set("content-length", String(object.size));
+  headers.set("content-length", String(bytes));
   headers.set("accept-ranges", "bytes");
   headers.set("cache-control", "public, max-age=600");
+  if (contentRange) headers.set("content-range", contentRange);
   if (kind === "ipa") headers.set("content-disposition", 'attachment; filename="SkateFitMotionLab.ipa"');
-  return new Response(request.method === "HEAD" ? null : object.body, {status: 200, headers});
+  return new Response(request.method === "HEAD" ? null : object.body, {
+    status: responseStatus, headers
+  });
 }
