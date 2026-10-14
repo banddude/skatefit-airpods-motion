@@ -1,5 +1,6 @@
 import SwiftUI
 import SpriteKit
+import UIKit
 
 /// Platform runner controlled by calibrated board pitch. Positive pitch is
 /// nose-up/manual; negative pitch is nose-manual. Phone-only demo controls
@@ -11,6 +12,9 @@ struct ManualRunnerGame: View {
     @State private var demoPitch = 0.0
     @State private var demoMode = false
     @State private var playing = false
+    @AppStorage("runner.bestScore") private var bestScore = 0
+    @AppStorage("runner.unlockedLevel") private var unlockedLevel = 1
+    @State private var selectedLevel = 1
     private let ticker = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -23,6 +27,17 @@ struct ManualRunnerGame: View {
                 }
                 Spacer()
                 Text("LEVEL \(engine.level)").font(.headline.monospacedDigit())
+            }
+            Picker("Course", selection: $selectedLevel) {
+                ForEach(1...5, id: \.self) { n in
+                    Text("Course \(n)").tag(n)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(playing)
+            .onChange(of: selectedLevel) { _, value in
+                if value > unlockedLevel { selectedLevel = unlockedLevel }
+                engine.reset(course: selectedLevel)
             }
             RunnerSceneView(engine: engine)
                 .frame(height: 330)
@@ -45,10 +60,12 @@ struct ManualRunnerGame: View {
                             (store.latestOrientation?.pitchDegrees ?? 0)))
                     .monospacedDigit()
             }
-            if !store.hasCalibration {
-                Toggle("Demo controls (no AirPod)", isOn: $demoMode)
-                    .font(.subheadline)
-            }
+            Toggle("Practice with screen controls", isOn: $demoMode)
+                .font(.subheadline)
+            Text(demoMode ? "PRACTICE MODE · Scores do not count as sensor-verified." :
+                 (store.hasCalibration ? "AIRPOD CONTROLS" : "Calibrate in Setup & Lab or use practice controls."))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
             if demoMode {
                 HStack {
                     Button("NOSE MANUAL / DUCK") { demoPitch = -16 }
@@ -59,11 +76,19 @@ struct ManualRunnerGame: View {
                 .font(.caption2)
             }
             Button(playing ? "Pause runner" : (engine.gameOver ? "Retry level" : "Play runner")) {
-                if engine.gameOver { engine.reset() }
+                if engine.gameOver { engine.reset(course: selectedLevel) }
+                if !playing && !demoMode && !store.hasCalibration { return }
                 playing.toggle()
             }
             .buttonStyle(.borderedProminent)
             .frame(maxWidth: .infinity)
+            .disabled(!playing && !demoMode && !store.hasCalibration)
+            HStack {
+                Label("BEST \(bestScore)", systemImage: "crown.fill")
+                Spacer()
+                Text("UNLOCKED \(unlockedLevel)/5")
+            }
+            .font(.caption.weight(.bold))
             Text("Hold a manual to jump over gaps. Hold a nose manual to duck under obstacles. Collect stars, avoid hazards, reach the finish.")
                 .font(.caption).foregroundStyle(.secondary)
         }
@@ -73,7 +98,13 @@ struct ManualRunnerGame: View {
             lastTick = now
             let pitch = demoMode ? demoPitch : (store.latestOrientation?.pitchDegrees ?? 0)
             engine.advance(dt: dt, pitch: pitch)
-            if engine.gameOver { playing = false }
+            if engine.gameOver {
+                playing = false
+                if engine.won && !demoMode {
+                    bestScore = max(bestScore, engine.score)
+                    unlockedLevel = min(5, max(unlockedLevel, selectedLevel + 1))
+                }
+            }
         }
     }
 }
@@ -88,66 +119,86 @@ struct ManualRunnerGame: View {
     var crouching = false
     var message = "Ready to roll"
     var gameOver = false
+    var won = false
     var obstacles: [RunnerObstacle] = []
-    private var nextSpawn = 2.5
+    var combo = 0
+    var progress: Double { min(1, distance / courseLength) }
+    var courseLength: Double { 95 + Double(level) * 20 }
+    private var nextSpawn = 10.0
     private var lastPitch = 0.0
+    private var spawnIndex = 0
+    private var invulnerable = 0.0
+    private var jumpBuffer = 0.0
 
-    func reset() {
-        score = 0; lives = 3; level = 1; distance = 0; height = 0
-        velocity = 0; crouching = false; gameOver = false
-        nextSpawn = 2.5; obstacles = []; lastPitch = 0
+    func reset(course: Int = 1) {
+        score = 0; lives = 3; level = max(1, min(5, course)); distance = 0
+        height = 0; velocity = 0; crouching = false; gameOver = false
+        won = false; nextSpawn = 10; obstacles = []; lastPitch = 0
+        spawnIndex = 0; combo = 0; invulnerable = 0; jumpBuffer = 0
         message = "Ready to roll"
     }
 
-    func advance(dt: Double, pitch: Double) {
+    func advance(dt rawDt: Double, pitch: Double) {
         guard !gameOver else { return }
-        let speed = 4.3 + Double(level) * 0.65
+        let dt = min(0.05, max(0, rawDt))
+        guard dt > 0 else { return }
+        let speed = 4.0 + Double(level) * 0.35
         distance += speed * dt
-        level = min(10, 1 + Int(distance / 110))
+        invulnerable = max(0, invulnerable - dt)
+        jumpBuffer = max(0, jumpBuffer - dt)
         crouching = pitch < -9 && height < 0.12
-        // Nose-up rising edge starts a jump; avoids holding to fly forever.
-        if pitch > 9 && lastPitch <= 9 && height <= 0.01 {
+        // A buffered rising edge supports timing a jump shortly before a gap.
+        if pitch > 9 && lastPitch <= 9 { jumpBuffer = 0.22 }
+        lastPitch = pitch
+        if jumpBuffer > 0 && height <= 0.01 && !crouching {
             velocity = 6.5
+            jumpBuffer = 0
             message = "MANUAL JUMP!"
         }
-        lastPitch = pitch
         if height > 0 || velocity > 0 {
             height = max(0, height + velocity * dt)
-            velocity -= 15.0 * dt
+            velocity -= 15 * dt
             if height == 0 { velocity = 0 }
         }
         nextSpawn -= speed * dt
-        if nextSpawn <= 0 {
-            let index = Int(distance / 8) % 3
-            obstacles.append(RunnerObstacle(
-                x: 16, kind: index == 0 ? .gap : index == 1 ? .barrier : .overhead))
-            nextSpawn = 11.0 + Double(index) * 2
+        if nextSpawn <= 0 && distance < courseLength - 18 {
+            let pattern = [0, 1, 2, 1, 0, 2, 0, 1, 2]
+            let kind = pattern[(spawnIndex + level - 1) % pattern.count]
+            obstacles.append(RunnerObstacle(x: 16,
+                kind: kind == 0 ? .gap : kind == 1 ? .barrier : .overhead))
+            spawnIndex += 1
+            nextSpawn += 13 + Double(spawnIndex % 2) * 2
         }
-        for i in obstacles.indices {
-            obstacles[i].x -= speed * dt
-        }
-        for i in obstacles.indices where !obstacles[i].resolved && obstacles[i].x < 1.4 {
+        for i in obstacles.indices { obstacles[i].x -= speed * dt }
+        for i in obstacles.indices where !obstacles[i].resolved && obstacles[i].x < 3.5 {
+            // Player is at x≈3.7 on the 16-unit playfield.
             obstacles[i].resolved = true
             let obstacle = obstacles[i]
             let passed: Bool
             switch obstacle.kind {
-            case .gap: passed = height > 0.5
-            case .barrier: passed = height > 0.7
+            case .gap: passed = height > 0.48
+            case .barrier: passed = height > 0.65
             case .overhead: passed = crouching
             }
             if passed {
-                score += 100
-                message = obstacle.kind == .overhead ? "NOSE MANUAL!" : "CLEAN!"
-            } else {
+                combo += 1
+                score += 100 * min(5, combo)
+                message = combo > 1 ? "COMBO x\(combo)!" :
+                    (obstacle.kind == .overhead ? "NOSE MANUAL!" : "CLEAN!")
+            } else if invulnerable == 0 {
                 lives -= 1
+                combo = 0
+                invulnerable = 1.0
                 message = "OUCH!"
                 if lives <= 0 { gameOver = true; message = "GAME OVER" }
             }
         }
         obstacles.removeAll { $0.x < -3 }
-        if Int(distance) % 75 == 0 && distance > 1 {
-            // Finishing progression comes from clearing hazards, not raw motion alone.
-            message = "Keep rolling!"
+        if distance >= courseLength && !gameOver {
+            gameOver = true
+            won = true
+            score += lives * 250
+            message = "COURSE CLEARED!"
         }
     }
 }
@@ -187,6 +238,9 @@ struct RunnerSceneView: View {
                 Rectangle().fill(.mint)
                     .frame(height: 5)
                     .position(x: w / 2, y: h * 0.76)
+                Rectangle().fill(.yellow)
+                    .frame(width: w * CGFloat(engine.progress), height: 5)
+                    .position(x: w * CGFloat(engine.progress) / 2, y: 5)
                 ForEach(engine.obstacles) { obstacle in
                     let x = w * CGFloat(obstacle.x / 16)
                     Group {
