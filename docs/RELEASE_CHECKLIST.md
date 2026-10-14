@@ -72,3 +72,15 @@ xcodebuild -project SkateMotion.xcodeproj -scheme SkateMotion -destination 'plat
 - [ ] Physical mounted-AirPod validation against witnessed manual duration and wobble.
 - [ ] Check dropout, reconnection, stale packets, false-positive holds and sustained battery use.
 - [ ] Verify installed IPA does not request camera permission.
+
+
+## Beta 16: AirPod game input acceptance
+
+- [x] Default Auto source selection uses a fresh calibrated AirPod when available, instead of silently forcing Touch.
+- [x] Home screen identifies actual runner control source and offers a one-tap Ride With Board option, with calibration route when unavailable.
+- [x] An AirPod-controlled run cannot move, award points or spend lives before the first real board tilt.
+- [x] Main scene reflects real nose/tail tilt, and in-game 3D skateboard shows current quaternion attitude with sensor rate and action feedback.
+- [x] Manual pop and nose-manual duck use dynamic practice angle thresholds and hysteresis; inversion produces neutral input.
+- [x] Dropout pauses rather than silently switching control modes; Touch must be chosen explicitly.
+- [ ] Test physical board-connected gameplay, input sign, 3D view, packet jitter and sustained rendering performance.
+- [ ] Verify game source choice remains correct when old versions had saved Touch mode.

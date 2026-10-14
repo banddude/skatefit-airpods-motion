@@ -1,6 +1,6 @@
 # SkateFit Motion Lab beta distribution
 
-The beta is a separate iPhone app with bundle identifier `com.banddude.skatefit.motionlab`, version `0.1.0`, build `15`. It does **not** modify the production SkateFit app.
+The beta is a separate iPhone app with bundle identifier `com.banddude.skatefit.motionlab`, version `0.1.0`, build `16`. It does **not** modify the production SkateFit app.
 
 **Direct-install page:** https://skatefit-motion-lab.mikejshaffer.workers.dev/install
 
@@ -65,14 +65,14 @@ Verify the exported IPA by extracting it, checking that `codesign --verify --dee
 
 ```bash
 wrangler r2 object put \
-  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-15.ipa \
+  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-16.ipa \
   --file /tmp/skatefit-motion-beta-export/SkateMotion.ipa \
   --remote --content-type application/octet-stream
 
 wrangler deploy
 ```
 
-The command above is illustrative only. The object key, manifest metadata, installer text and IPA version must all match the current build. Build 15 uses \`ios/SkateFitMotionLab-0.1.0-15.ipa\`. Never change the Worker installer to a build unless the new IPA object has been uploaded and its checksum verified.
+The command above is illustrative only. The object key, manifest metadata, installer text and IPA version must all match the current build. Build 16 uses \`ios/SkateFitMotionLab-0.1.0-16.ipa\`. Never change the Worker installer to a build unless the new IPA object has been uploaded and its checksum verified.
 
 ## TestFlight transition
 
@@ -241,3 +241,13 @@ Yaw is relative to flat calibration and may drift over time.
 - Removes camera and optical marker tracking, app permission and printed marker assets.
 - Adds source-specific AirPod sample quality, detailed manual attempt history, stream interruption handling, and personal goal recommendations.
 - Local training and game data retained. Production SkateFit remains unchanged.
+
+## Beta 16: Active AirPod gameplay
+
+- Auto mode selects a fresh calibrated board AirPod for the runner, while respecting explicitly selected Touch.
+- RIDE WITH BOARD is available on the home screen whenever the AirPod is ready. Otherwise a clear button opens Motion Lab calibration.
+- AirPod-controlled runs wait for the first physical board tilt before scoring or progressing.
+- Calibrated nose-up and tail-up tilt drive manual pop and nose manual duck. Inverted poses never trigger false controls.
+- The 3D board and game's skateboard follow real board tilt. Input pitch, roll, state and sample rate are visible.
+- A disconnected stream pauses the run. Reconnect AirPods or explicitly choose Touch.
+- Existing saved career, training history, no-camera policy and default-off cloud telemetry are preserved.

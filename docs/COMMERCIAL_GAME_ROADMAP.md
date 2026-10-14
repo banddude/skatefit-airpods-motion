@@ -1,3 +1,9 @@
+## Beta 16: Actual board controls for the platform runner
+
+Auto source routing selects a calibrated streaming AirPod on Drop In, and an explicit Ride With Board action overrides old Touch preferences. The game starts motion-controlled runs only after the player physically tilts the deck, uses the calibrated manual angle threshold, animates the runner's deck and an accurate 3D quaternion skateboard, and exposes live action/pose diagnostics. AirPod signal loss pauses the run instead of masking it as touch.
+
+Physical mounted-AirPod game testing and continuous 30 Hz responsiveness validation remain pending.
+
 # SkateFit Manual Runner: commercial production specification
 
 ## Product promise
