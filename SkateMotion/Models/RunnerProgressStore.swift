@@ -21,8 +21,16 @@ struct RunnerCareer: Codable, Equatable {
     var selectedDeck = "Mint"
 
     var totalStars: Int { records.values.reduce(0) { $0 + $1.bestStars } }
+    /// Original beta-11 course IDs 1...5 continue to unlock the next world.
+    /// New optional courses have IDs 6...15 and must not corrupt that logic.
     var highestUnlocked: Int {
-        min(5, max(1, (records.keys.max() ?? 0) + 1))
+        min(5, max(1, (records.keys.filter { (1...5).contains($0) }.max() ?? 0) + 1))
+    }
+    func isUnlocked(_ course: RunnerCourse) -> Bool {
+        if course.stageNumber == 1 { return course.worldNumber <= highestUnlocked }
+        let previousID = RunnerCourse.id(world: course.worldNumber,
+                                         stage: course.stageNumber - 1)
+        return records[previousID] != nil
     }
     var totalXP: Int {
         records.values.reduce(0) { $0 + $1.bestScore } / 10 +
@@ -41,7 +49,10 @@ struct RunnerDeck: Identifiable {
         RunnerDeck(id: "Sunset", requiredStars: 3, tint: "orange"),
         RunnerDeck(id: "Electric", requiredStars: 6, tint: "cyan"),
         RunnerDeck(id: "Gold", requiredStars: 10, tint: "yellow"),
-        RunnerDeck(id: "Midnight", requiredStars: 14, tint: "purple")
+        RunnerDeck(id: "Midnight", requiredStars: 14, tint: "purple"),
+        RunnerDeck(id: "Streetlight", requiredStars: 21, tint: "pink"),
+        RunnerDeck(id: "Ice", requiredStars: 32, tint: "white"),
+        RunnerDeck(id: "Legend", requiredStars: 42, tint: "red")
     ]
 }
 
@@ -98,7 +109,7 @@ struct RunnerCompletion {
     }
 
     func record(_ completion: RunnerCompletion, mode: RunnerControlMode) {
-        guard (1...5).contains(completion.course),
+        guard RunnerCourse.catalog.contains(where: { $0.id == completion.course }),
               (1...3).contains(completion.stars),
               completion.seconds.isFinite && completion.seconds > 0,
               completion.score >= 0, completion.pickups >= 0,
@@ -140,8 +151,9 @@ struct RunnerCompletion {
             if fileManager.fileExists(atPath: saveURL.path),
                let raw = try? Data(contentsOf: saveURL),
                (try? JSONDecoder().decode(RunnerCareer.self, from: raw)) != nil {
-                try? fileManager.removeItem(at: backupURL)
-                try fileManager.copyItem(at: saveURL, to: backupURL)
+                // Atomic replacement retains the old backup if an interrupted
+                // filesystem write occurs; never delete the backup first.
+                try raw.write(to: backupURL, options: .atomic)
             }
             try encoded.write(to: saveURL, options: .atomic)
             saveError = nil

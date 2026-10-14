@@ -40,10 +40,12 @@ struct ManualRunnerGame: View {
     @State private var progress = RunnerProgressStore()
     @State private var page: RunnerPage = .play
     @State private var phase: RunnerPhase = .paused
-    @State private var selectedLevel = 1
+    @AppStorage("runner.selectedCourseID") private var selectedLevel = 1
     @State private var manualHeld = false
     @State private var noseHeld = false
     @State private var queuedManual = false
+    @State private var accessibleNoseRemaining = 0.0
+    @State private var motionAdapter = RunnerMotionAdapter()
     @State private var lastTick = Date()
     @State private var lastFeedbackEvent = 0
     @State private var sensorDropped = false
@@ -66,11 +68,10 @@ struct ManualRunnerGame: View {
     }
 
     private var motionReady: Bool {
-        store.isRecording && store.boardSensorReady &&
-            store.hasCalibration && store.latestOrientation != nil
+        store.gameMotionReady
     }
 
-    private var course: RunnerCourse { RunnerCourse.catalog[selectedLevel - 1] }
+    private var course: RunnerCourse { RunnerCourse.get(selectedLevel) }
 
     private var deckColor: Color {
         switch progress.career.selectedDeck {
@@ -78,6 +79,9 @@ struct ManualRunnerGame: View {
         case "Electric": return .cyan
         case "Gold": return .yellow
         case "Midnight": return .purple
+        case "Streetlight": return .pink
+        case "Ice": return .white
+        case "Legend": return .red
         default: return .mint
         }
     }
@@ -110,6 +114,15 @@ struct ManualRunnerGame: View {
         .foregroundStyle(.white)
         .background(background.ignoresSafeArea())
         .onReceive(ticker) { now in tick(now) }
+        .onAppear {
+            // Old beta selections and corrupted preferences cannot navigate
+            // outside the known course catalog.
+            let validated = RunnerCourse.get(selectedLevel).id
+            if selectedLevel != validated { selectedLevel = validated }
+            if page != .run && engine.level != validated {
+                engine.reset(course: validated)
+            }
+        }
         .onChange(of: scenePhase) { _, next in
             if next != .active && phase == .active {
                 pause()
@@ -173,7 +186,7 @@ struct ManualRunnerGame: View {
                     .clipShape(RoundedRectangle(cornerRadius: 23))
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("WORLD \(selectedLevel) / 5")
+                        Text("WORLD \(course.worldNumber) · STAGE \(course.stageNumber)/3")
                             .font(.caption2.weight(.black))
                             .foregroundStyle(accent)
                         Text(course.name).font(.title2.weight(.heavy))
@@ -207,7 +220,7 @@ struct ManualRunnerGame: View {
             }
 
             HStack(spacing: 10) {
-                statTile(value: "\(progress.career.totalStars)/15", label: "STARS", icon: "star.fill")
+                statTile(value: "\(progress.career.totalStars)/45", label: "STARS", icon: "star.fill")
                 statTile(value: "\(progress.career.playerLevel)", label: "RIDER LVL", icon: "bolt.fill")
                 statTile(value: "\(progress.career.completedRuns)", label: "FINISHES", icon: "flag.fill")
             }
@@ -218,7 +231,7 @@ struct ManualRunnerGame: View {
                         .tracking(1.5).foregroundStyle(accent)
                     Text("Earn all three stars")
                         .font(.headline)
-                    Text("Finish. Don't bail. Grab the pickups.")
+                    Text("Finish, stay clean, collect pickups and hold your balance lines.")
                         .font(.caption).foregroundStyle(.white.opacity(0.65))
                 }
                 Spacer()
@@ -230,47 +243,72 @@ struct ManualRunnerGame: View {
     }
 
     private var worldList: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeading("Five worlds.", subtitle: "Every run has its own timing and flow.")
-            ForEach(RunnerCourse.catalog) { world in
-                let unlocked = world.id <= progress.career.highestUnlocked
-                Button {
-                    if unlocked {
-                        selectedLevel = world.id
-                        engine.reset(course: world.id)
-                        page = .play
-                    }
-                } label: {
-                    HStack(spacing: 13) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(unlocked ? accent.opacity(0.18) : soft)
-                                .frame(width: 62, height: 68)
-                            Image(systemName: unlocked ? "figure.skating" : "lock.fill")
-                                .font(.title2).foregroundStyle(unlocked ? accent : .gray)
-                        }
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("WORLD \(world.id)  ·  \(world.world)")
-                                .font(.caption2.bold()).tracking(1.1)
+        VStack(alignment: .leading, spacing: 15) {
+            sectionHeading("15 stages. Five worlds.",
+                           subtitle: "Three unique stages in each world. Beat a stage to unlock the next.")
+            ForEach(1...5, id: \.self) { number in
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("0\(number)")
+                            .font(.system(size: 31, weight: .black, design: .rounded))
+                            .foregroundStyle(accent)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("WORLD \(number)")
+                                .font(.caption2.weight(.black)).tracking(1.5)
                                 .foregroundStyle(accent)
-                            Text(world.name).font(.headline.weight(.bold))
-                            Text(world.description)
-                                .font(.caption).foregroundStyle(.white.opacity(0.65))
-                                .multilineTextAlignment(.leading)
+                            Text(RunnerCourse.worldNames[number - 1].capitalized)
+                                .font(.title3.weight(.heavy))
                         }
-                        Spacer(minLength: 0)
-                        VStack(spacing: 5) {
-                            Image(systemName: unlocked ? "chevron.right" : "lock")
-                            Text("\(progress.career.records[world.id]?.bestStars ?? 0)/3 ★")
-                                .font(.caption2.monospacedDigit())
-                        }
-                        .foregroundStyle(unlocked ? .white : .gray)
+                        Spacer()
+                        let completed = RunnerCourse.catalog.filter {
+                            $0.worldNumber == number &&
+                            progress.career.records[$0.id] != nil
+                        }.count
+                        Text("\(completed)/3")
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.7))
                     }
-                    .padding(12)
-                    .background(soft, in: RoundedRectangle(cornerRadius: 18))
+                    .padding(.horizontal, 8)
+                    ForEach(RunnerCourse.catalog.filter { $0.worldNumber == number }) { stage in
+                        let unlocked = progress.career.isUnlocked(stage)
+                        Button {
+                            if unlocked {
+                                selectedLevel = stage.id
+                                engine.reset(course: stage.id)
+                                page = .play
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 13)
+                                        .fill(unlocked ? accent.opacity(0.17) : background)
+                                        .frame(width: 47, height: 55)
+                                    Image(systemName: unlocked ? "figure.skating" : "lock.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(unlocked ? accent : .gray)
+                                }
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text("STAGE \(stage.stageNumber) · \(stage.name)")
+                                        .font(.subheadline.weight(.bold))
+                                        .multilineTextAlignment(.leading)
+                                    Text(stage.description)
+                                        .font(.caption)
+                                        .foregroundStyle(.white.opacity(0.6))
+                                        .multilineTextAlignment(.leading)
+                                }
+                                Spacer(minLength: 0)
+                                Text("\(progress.career.records[stage.id]?.bestStars ?? 0) ★")
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(unlocked ? .yellow : .gray)
+                            }
+                            .padding(12)
+                            .background(soft, in: RoundedRectangle(cornerRadius: 15))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!unlocked)
+                    }
                 }
-                .buttonStyle(.plain)
-                .disabled(!unlocked)
+                .padding(.vertical, 8)
             }
         }
     }
@@ -281,8 +319,8 @@ struct ManualRunnerGame: View {
             challenge("First drop", detail: "Finish one course",
                       value: progress.career.completedRuns, target: 1,
                       symbol: "flag.checkered")
-            challenge("Star collector", detail: "Collect 9 course stars",
-                      value: progress.career.totalStars, target: 9,
+            challenge("Star collector", detail: "Collect 24 course stars",
+                      value: progress.career.totalStars, target: 24,
                       symbol: "star.fill")
             challenge("No bails", detail: "Finish 3 courses without a hit",
                       value: progress.career.cleanRuns, target: 3,
@@ -293,8 +331,8 @@ struct ManualRunnerGame: View {
             challenge("Nose manual ninja", detail: "Complete 12 nose manual lines",
                       value: progress.career.totalNoseLines, target: 12,
                       symbol: "arrow.down.right")
-            challenge("World tour", detail: "Finish all five worlds",
-                      value: progress.career.records.count, target: 5,
+            challenge("World tour", detail: "Finish all fifteen stages",
+                      value: progress.career.records.count, target: 15,
                       symbol: "globe.americas.fill")
             Text("These are game accomplishments, not verified real-world skateboard tricks.")
                 .font(.caption)
@@ -405,6 +443,19 @@ struct ManualRunnerGame: View {
             Toggle("System sound effects", isOn: $soundEnabled).panel()
             Toggle("Reduced background motion", isOn: $reduceSceneMotion).panel()
             Toggle("High contrast", isOn: $highContrast).panel()
+            VStack(alignment: .leading, spacing: 11) {
+                Text("HOW TO BUILD A PERFECT LINE")
+                    .font(.caption2.weight(.black)).tracking(1.4)
+                    .foregroundStyle(accent)
+                Text("1  MANUAL pops over street gaps and barriers.")
+                Text("2  NOSE MANUAL ducks under beams and neon gates.")
+                Text("3  Hold either balance pose on its matching glowing strip to charge your Flow Meter.")
+                Text("4  Filled Flow doubles your score. Finish clean, grab pickups and hold balance lines to earn all three stars.")
+                Text("5  Green launch ramps automatically give you extra height for the long chasms.")
+            }
+            .font(.caption)
+            .foregroundStyle(.white.opacity(0.8))
+            .panel()
             Button("Open recorder and 3D calibration") { openMotionLab() }
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(accent)
@@ -454,7 +505,7 @@ struct ManualRunnerGame: View {
                     .font(.subheadline.weight(.bold))
                     Spacer()
                     VStack(spacing: 3) {
-                        Text("WORLD \(selectedLevel)")
+                        Text("WORLD \(course.worldNumber) · \(course.stageNumber)/3")
                             .font(.system(size: 10, weight: .black)).tracking(2)
                             .foregroundStyle(accent)
                         Text(course.name).font(.subheadline.weight(.bold))
@@ -487,6 +538,28 @@ struct ManualRunnerGame: View {
                 }
                 .padding(.horizontal, 5)
 
+                HStack(spacing: 9) {
+                    Image(systemName: "arrow.forward.circle.fill")
+                        .foregroundStyle(engine.cueSeconds < 2.6 ? .yellow : accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("UP NEXT")
+                            .font(.system(size: 9, weight: .black)).tracking(1.8)
+                            .foregroundStyle(.white.opacity(0.6))
+                        Text(engine.nextCue)
+                            .font(.subheadline.weight(.black))
+                            .foregroundStyle(.white)
+                    }
+                    Spacer()
+                    if engine.nextAction != nil {
+                        Text(String(format: "%.1fs", engine.cueSeconds))
+                            .font(.subheadline.monospacedDigit().bold())
+                            .foregroundStyle(engine.cueSeconds < 2.6 ? .yellow : accent)
+                    }
+                }
+                .padding(11)
+                .background(soft, in: RoundedRectangle(cornerRadius: 14))
+                .accessibilityElement(children: .combine)
+
                 RunnerSceneView(engine: engine, deckColor: deckColor,
                                 reduceMotion: reduceSceneMotion || systemReduceMotion,
                                 highContrast: highContrast)
@@ -503,6 +576,23 @@ struct ManualRunnerGame: View {
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(engine.eventKind == "damage" ? .orange : accent)
                 .padding(.horizontal, 5)
+
+                HStack(spacing: 10) {
+                    Image(systemName: "bolt.fill").foregroundStyle(accent)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("FLOW METER").font(.caption2.weight(.black)).tracking(1)
+                            Spacer()
+                            Text("x\(engine.flowMultiplier) SCORE")
+                                .font(.caption2.weight(.black))
+                                .foregroundStyle(engine.flowMultiplier > 1 ? .yellow : .white.opacity(0.6))
+                        }
+                        ProgressView(value: engine.flowEnergy).tint(engine.flowMultiplier > 1 ? .yellow : accent)
+                    }
+                }
+                .padding(12)
+                .background(soft, in: RoundedRectangle(cornerRadius: 14))
+                .accessibilityLabel("Flow meter \(Int(engine.flowEnergy * 100)) percent, multiplier \(engine.flowMultiplier)")
 
                 if phase == .active && mode == .touch {
                     touchPads
@@ -551,7 +641,7 @@ struct ManualRunnerGame: View {
                 .gesture(DragGesture(minimumDistance: 0)
                     .onChanged { _ in noseHeld = true }
                     .onEnded { _ in noseHeld = false })
-                .accessibilityAction { noseHeld = true }
+                .accessibilityAction { accessibleNoseRemaining = 1.1 }
                 .accessibilityLabel("Nose manual. Hold to duck.")
                 .accessibilityAddTraits(.isButton)
         }
@@ -599,9 +689,11 @@ struct ManualRunnerGame: View {
                 Button("RETRY COURSE") { startCourse() }
                     .buttonStyle(.borderedProminent).tint(accent)
                     .frame(maxWidth: .infinity)
-                if engine.won && selectedLevel < progress.career.highestUnlocked {
-                    Button("NEXT WORLD") {
-                        selectedLevel = min(5, selectedLevel + 1)
+                if engine.won,
+                   let next = RunnerCourse.next(after: selectedLevel),
+                   progress.career.isUnlocked(next) {
+                    Button("NEXT STAGE") {
+                        selectedLevel = next.id
                         startCourse()
                     }
                     .buttonStyle(.bordered).tint(accent)
@@ -647,6 +739,8 @@ struct ManualRunnerGame: View {
         manualHeld = false
         noseHeld = false
         queuedManual = false
+        accessibleNoseRemaining = 0
+        motionAdapter.reset()
         lastFeedbackEvent = 0
         lastTick = Date()
     }
@@ -656,6 +750,7 @@ struct ManualRunnerGame: View {
         manualHeld = false
         noseHeld = false
         queuedManual = false
+        accessibleNoseRemaining = 0
     }
 
     private func resume() {
@@ -668,9 +763,9 @@ struct ManualRunnerGame: View {
     }
 
     private func tick(_ now: Date) {
+        guard page == .run, phase == .active else { return }
         let delta = min(0.08, max(0, now.timeIntervalSince(lastTick)))
         lastTick = now
-        guard page == .run, phase == .active else { return }
         if mode == .motion && !motionReady {
             sensorDropped = true
             pause()
@@ -686,12 +781,13 @@ struct ManualRunnerGame: View {
             micro?.buttonX.isPressed == true
         let input: RunnerInput
         if mode == .motion {
-            input = .from(pitch: store.latestOrientation?.pitchDegrees ?? 0)
+            input = motionAdapter.accept(pitch: store.gamePitch)
         } else {
             input = RunnerInput(manual: manualHeld || queuedManual || gamepadManual,
-                                noseManual: noseHeld || gamepadNose)
+                                noseManual: noseHeld || accessibleNoseRemaining > 0 || gamepadNose)
         }
         engine.advance(dt: delta, input: input)
+        accessibleNoseRemaining = max(0, accessibleNoseRemaining - delta)
         queuedManual = false
         if lastFeedbackEvent != engine.eventRevision {
             lastFeedbackEvent = engine.eventRevision
@@ -712,7 +808,7 @@ struct ManualRunnerGame: View {
             switch kind {
             case "damage": UINotificationFeedbackGenerator().notificationOccurred(.error)
             case "finish": UINotificationFeedbackGenerator().notificationOccurred(.success)
-            case "pickup", "line": UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            case "pickup", "line", "boost": UIImpactFeedbackGenerator(style: .light).impactOccurred()
             case "jump": UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             default: break
             }
@@ -780,6 +876,9 @@ struct ManualRunnerGame: View {
         case "Electric": return .cyan
         case "Gold": return .yellow
         case "Midnight": return .purple
+        case "Streetlight": return .pink
+        case "Ice": return .white
+        case "Legend": return .red
         default: return .mint
         }
     }

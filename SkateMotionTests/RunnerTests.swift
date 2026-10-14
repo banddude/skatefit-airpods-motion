@@ -35,13 +35,15 @@ final class RunnerTests: XCTestCase {
         }
     }
 
-    func testFiveCoursesHaveUniqueLayoutsAndFinishLines() {
-        XCTAssertEqual(RunnerCourse.catalog.count, 5)
+    func testFifteenCoursesHaveUniqueLayoutsAndFinishLines() {
+        XCTAssertEqual(RunnerCourse.catalog.count, 15)
         for course in RunnerCourse.catalog {
             let game = RunnerEngine()
             game.reset(course: course.id)
             XCTAssertEqual(game.level, course.id)
             XCTAssertGreaterThan(game.courseLength, 100)
+            XCTAssertTrue((1...5).contains(course.worldNumber))
+            XCTAssertTrue((1...3).contains(course.stageNumber))
             XCTAssertTrue(Set(course.features.map(\.id)).count == course.features.count)
             XCTAssertTrue(course.features.contains { $0.kind == .manualLine })
             XCTAssertTrue(course.features.contains { $0.kind == .noseLine })
@@ -49,7 +51,9 @@ final class RunnerTests: XCTestCase {
             XCTAssertFalse(game.gameOver)
         }
         XCTAssertGreaterThan(RunnerCourse.catalog[0].length /
-                             RunnerCourse.catalog[0].speed, 150)
+                             RunnerCourse.catalog[0].speed, 60)
+        XCTAssertEqual(RunnerCourse.playOrder.count, 15)
+        XCTAssertEqual(Set(RunnerCourse.catalog.map(\.id)).count, 15)
     }
 
     func testJumpClearsFirstGapWhenTimedCorrectly() {
@@ -121,7 +125,7 @@ final class RunnerTests: XCTestCase {
                     case .gap, .barrier:
                         manual = manual ||
                             (d >= item.at - 1.3 && d <= item.end + 0.4)
-                    case .overhead:
+                    case .overhead, .pulseGate:
                         nose = nose ||
                             (d >= item.at - 0.9 && d <= item.end + 0.4)
                     case .manualLine:
@@ -130,6 +134,10 @@ final class RunnerTests: XCTestCase {
                     case .noseLine:
                         nose = nose ||
                             (d >= item.at - 0.9 && d <= item.end + 0.4)
+                    case .springPad, .longGap:
+                        // Automatically launch off the ramp. Normal pop input
+                        // would waste the boost if held too early.
+                        break
                     default: break
                     }
                 }
@@ -213,7 +221,7 @@ final class RunnerProgressTests: XCTestCase {
         let folder = try temporaryFolder()
         defer { try? FileManager.default.removeItem(at: folder) }
         let progress = RunnerProgressStore(directory: folder)
-        progress.record(completion(course: 7), mode: .touch)
+        progress.record(completion(course: 99), mode: .touch)
         progress.chooseDeck("Gold")
         XCTAssertEqual(progress.career.completedRuns, 0)
         XCTAssertEqual(progress.career.selectedDeck, "Mint")

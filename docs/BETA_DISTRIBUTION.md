@@ -65,14 +65,14 @@ Verify the exported IPA by extracting it, checking that `codesign --verify --dee
 
 ```bash
 wrangler r2 object put \
-  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-11.ipa \
+  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-12.ipa \
   --file /tmp/skatefit-motion-beta-export/SkateMotion.ipa \
   --remote --content-type application/octet-stream
 
 wrangler deploy
 ```
 
-The command above is illustrative only. The object key, manifest metadata, installer text and IPA version must all match the current build. Build 11 uses \`ios/SkateFitMotionLab-0.1.0-11.ipa\`. Never change the Worker installer to a build unless the new IPA object has been uploaded and its checksum verified.
+The command above is illustrative only. The object key, manifest metadata, installer text and IPA version must all match the current build. Build 12 uses \`ios/SkateFitMotionLab-0.1.0-12.ipa\`. Never change the Worker installer to a build unless the new IPA object has been uploaded and its checksum verified.
 
 ## TestFlight transition
 
@@ -210,3 +210,10 @@ Yaw is relative to flat calibration and may drift over time.
 - New 120 Hz game simulation and repeatable five-course perfect-run tests.
 - Public experimental cloud telemetry is now opt-in, **off by default**. Any packets saved by previous versions stay locally queued until an explicit opt-in.
 - This beta is intended for one enrolled test phone and must not be mistaken for App Store readiness.
+
+## Beta build 12: Expanded platform game
+
+- Fifteen individual stages (three per world), new pulsing gates, long chasms, glowing launch pads, score Flow Meter, dynamic upcoming-obstacle cues, extra deck colors and persisted stage selection.
+- Motion controller decoupled from diagnostics display throttling: up to 30 Hz game pitch with 0.75-second freshness check and tilt hysteresis.
+- Added end-to-end XCUITest flows for normal game use, stage selection and Motion Lab navigation. This is still an ad-hoc beta, not a public App Store release.
+- Beta 11 career files are retained. The experimental public Cloudflare telemetry remains opt-in only.

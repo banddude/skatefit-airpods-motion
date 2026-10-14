@@ -3,113 +3,6 @@ import Observation
 
 /// The game does not infer that an AirPod movement proves a landed trick.
 /// Both input methods control the same deterministic simulation.
-enum RunnerControlMode: String, Codable, CaseIterable {
-    case touch = "Touch"
-    case motion = "AirPods"
-}
-
-struct RunnerInput: Equatable, Codable {
-    var manual = false
-    var noseManual = false
-
-    static func from(pitch: Double) -> RunnerInput {
-        RunnerInput(manual: pitch > 9, noseManual: pitch < -9)
-    }
-}
-
-enum RunnerFeatureKind: String, Codable {
-    case gap, barrier, overhead, manualLine, noseLine, pickup, checkpoint
-
-    var isHazard: Bool {
-        switch self {
-        case .gap, .barrier, .overhead: return true
-        default: return false
-        }
-    }
-}
-
-struct RunnerFeature: Identifiable, Codable, Equatable {
-    let id: String
-    let kind: RunnerFeatureKind
-    let at: Double
-    let length: Double
-    var resolved = false
-    var failed = false
-    var exposure = 0.0
-    var heldTime = 0.0
-
-    var end: Double { at + length }
-}
-
-struct RunnerCourse: Identifiable {
-    let id: Int
-    let name: String
-    let world: String
-    let description: String
-    let speed: Double
-    let length: Double
-    let starTarget: Int
-    let features: [RunnerFeature]
-
-    static let catalog: [RunnerCourse] = (1...5).map(make)
-
-    private static func make(_ world: Int) -> RunnerCourse {
-        let names = ["First Light", "Concrete Dreams", "Neon Transit",
-                     "Skyline Transfer", "The Impossible Line"]
-        let worlds = ["NEIGHBORHOOD", "CONCRETE", "NEON", "SKYLINE", "FINALE"]
-        let descriptions = [
-            "Learn the language of manuals, gaps, and low rails.",
-            "Chain nose manuals between bigger pop challenges.",
-            "Flow through neon barriers and chase perfect combos.",
-            "Master alternating balance lines above the city.",
-            "One final run through everything you've learned."
-        ]
-        let rounds = world == 1 ? 12 : 7 + world
-        let speed = 4.35 + Double(world - 1) * 0.22
-        var features: [RunnerFeature] = []
-
-        func add(_ kind: RunnerFeatureKind, _ at: Double,
-                 _ length: Double = 1.0, _ section: Int, _ slot: Int) {
-            features.append(RunnerFeature(id: "w\(world)s\(section)i\(slot)",
-                                          kind: kind, at: at, length: length))
-        }
-
-        // Each 64-unit section is hand-patterned with generous separation.
-        // A full jump occupies about four horizontal units, so consecutive
-        // hazards are always separated by at least ten world units.
-        let motifs: [[(Double, RunnerFeatureKind, Double)]] = [
-            [(5, .gap, 1.5), (18, .barrier, 1), (32, .overhead, 1.7),
-             (46, .manualLine, 4.0)],
-            [(5, .noseLine, 4.2), (20, .overhead, 1.7),
-             (35, .gap, 1.8), (49, .barrier, 1)],
-            [(6, .barrier, 1), (20, .manualLine, 4.0),
-             (34, .gap, 1.7), (49, .overhead, 1.7)],
-            [(5, .gap, 1.7), (19, .noseLine, 4.0),
-             (34, .overhead, 1.5), (49, .barrier, 1)]
-        ]
-        for section in 0..<rounds {
-            let origin = 27.0 + Double(section) * 64.0
-            let motif = motifs[(section + world - 1) % motifs.count]
-            for (slot, pattern) in motif.enumerated() {
-                add(pattern.1, origin + pattern.0, pattern.2, section, slot)
-            }
-            add(.pickup, origin + 12, 0.85, section, 4)
-            add(.pickup, origin + 27, 0.85, section, 5)
-            add(.pickup, origin + 57, 0.85, section, 6)
-            if section == rounds / 2 - 1 {
-                add(.checkpoint, origin + 61, 0.3, section, 7)
-            }
-        }
-        features.sort { $0.at < $1.at }
-        return RunnerCourse(id: world, name: names[world - 1],
-                            world: worlds[world - 1],
-                            description: descriptions[world - 1],
-                            speed: speed,
-                            length: 27 + Double(rounds) * 64 + 15,
-                            starTarget: rounds * 2, features: features)
-    }
-}
-
 /// A fixed 120 Hz, zero-randomness platform simulation. Presentation frame
 /// rate and the physical sensor sampling rate do not determine its physics.
 @Observable final class RunnerEngine {
@@ -120,6 +13,7 @@ struct RunnerCourse: Identifiable {
     private(set) var height = 0.0
     private(set) var velocity = 0.0
     private(set) var crouching = false
+    private(set) var manualing = false
     private(set) var message = "Find your flow"
     private(set) var gameOver = false
     private(set) var won = false
@@ -129,6 +23,8 @@ struct RunnerCourse: Identifiable {
     private(set) var manualLines = 0
     private(set) var noseLines = 0
     private(set) var elapsed = 0.0
+    private(set) var flowEnergy = 0.0
+    private(set) var checkpointRetries = 0
     private(set) var invulnerabilityTime = 0.0
     private(set) var checkpointDistance = 0.0
     private(set) var features: [RunnerFeature] = []
@@ -145,26 +41,57 @@ struct RunnerCourse: Identifiable {
     private var checkpointManualLines = 0
     private var checkpointNoseLines = 0
     private var checkpointElapsed = 0.0
+    private var checkpointFlowEnergy = 0.0
+    private var checkpointCombo = 0
 
-    var course: RunnerCourse { RunnerCourse.catalog[level - 1] }
+    var course: RunnerCourse { RunnerCourse.get(level) }
+    var flowMultiplier: Int { flowEnergy >= 0.78 ? 2 : 1 }
+    var nextAction: RunnerFeature? {
+        features.first { !$0.resolved && $0.kind != .pickup &&
+                         $0.kind != .checkpoint && $0.at >= distance - 0.4 }
+    }
+    var nextCue: String {
+        guard let action = nextAction else { return "FINISH STRONG" }
+        switch action.kind {
+        case .gap, .barrier: return "MANUAL POP"
+        case .overhead, .pulseGate: return "NOSE MANUAL · DUCK"
+        case .manualLine: return "HOLD MANUAL"
+        case .noseLine: return "HOLD NOSE MANUAL"
+        case .springPad: return "LAUNCH RAMP"
+        case .longGap: return "CLEAR THE CHASM"
+        case .checkpoint: return "CHECKPOINT"
+        case .pickup: return "COLLECT"
+        }
+    }
+    var cueSeconds: Double {
+        guard let action = nextAction else { return 0 }
+        return max(0, (action.at - distance) / course.speed)
+    }
+    func pulseGateActive(_ feature: RunnerFeature) -> Bool {
+        sin(elapsed * (.pi * 2 / 1.9) + feature.at * 0.07) >= -0.1
+    }
+
     var courseLength: Double { course.length }
     var progress: Double { min(1, distance / courseLength) }
-    var noHit: Bool { damageCount == 0 }
+    var noHit: Bool { damageCount == 0 && checkpointRetries == 0 }
     var stars: Int {
         guard won else { return 0 }
-        return 1 + (noHit ? 1 : 0) + (pickups >= course.starTarget ? 1 : 0)
+        return 1 + (noHit ? 1 : 0) +
+            (pickups >= course.starTarget &&
+             manualLines + noseLines >= course.lineTarget ? 1 : 0)
     }
 
     init() { reset(course: 1) }
 
     func reset(course selected: Int = 1) {
-        level = max(1, min(5, selected))
+        level = RunnerCourse.get(selected).id
         score = 0
         lives = 3
         distance = 0
         height = 0
         velocity = 0
         crouching = false
+        manualing = false
         message = "Find your flow"
         gameOver = false
         won = false
@@ -174,6 +101,8 @@ struct RunnerCourse: Identifiable {
         manualLines = 0
         noseLines = 0
         elapsed = 0
+        flowEnergy = 0
+        checkpointRetries = 0
         invulnerabilityTime = 0
         checkpointDistance = 0
         features = course.features
@@ -187,6 +116,8 @@ struct RunnerCourse: Identifiable {
         checkpointManualLines = 0
         checkpointNoseLines = 0
         checkpointElapsed = 0
+        checkpointFlowEnergy = 0
+        checkpointCombo = 0
         eventRevision = 0
         eventKind = "ready"
     }
@@ -200,11 +131,14 @@ struct RunnerCourse: Identifiable {
         manualLines = checkpointManualLines
         noseLines = checkpointNoseLines
         elapsed = checkpointElapsed
+        flowEnergy = checkpointFlowEnergy
+        checkpointRetries += 1
         lives = 2
         height = 0
         velocity = 0
         crouching = false
-        combo = 0
+        manualing = false
+        combo = checkpointCombo
         lastManual = false
         jumpBuffer = 0
         simulationRemainder = 0
@@ -246,10 +180,12 @@ struct RunnerCourse: Identifiable {
         distance += speed * dt
         invulnerabilityTime = max(0, invulnerabilityTime - dt)
         jumpBuffer = max(0, jumpBuffer - dt)
+        flowEnergy = max(0, flowEnergy - dt * 0.025)
         coyote = grounded ? 0.085 : max(0, coyote - dt)
 
         let holdingManual = input.manual && !input.noseManual
         crouching = input.noseManual && !holdingManual && grounded
+        manualing = holdingManual && grounded
         if holdingManual && !lastManual { jumpBuffer = 0.16 }
         lastManual = holdingManual
 
@@ -282,22 +218,37 @@ struct RunnerCourse: Identifiable {
             }
 
             switch feature.kind {
-            case .gap:
+            case .gap, .longGap:
                 if height < 0.34 { damage(index) }
             case .barrier:
                 if height < 0.68 { damage(index) }
             case .overhead:
                 if !crouching || height > 0.12 { damage(index) }
+            case .pulseGate:
+                if pulseGateActive(feature) && (!crouching || height > 0.12) {
+                    damage(index)
+                }
+            case .springPad:
+                if grounded {
+                    features[index].resolved = true
+                    velocity = 11.7
+                    height = 0.02
+                    crouching = false
+                    announce("BOOST LAUNCH!", kind: "boost")
+                }
             case .manualLine, .noseLine:
                 features[index].exposure += dt
                 let matches = feature.kind == .manualLine ? holdingManual : input.noseManual
-                if grounded && matches { features[index].heldTime += dt }
+                if grounded && matches {
+                    features[index].heldTime += dt
+                    flowEnergy = min(1, flowEnergy + dt * 0.80)
+                }
             case .pickup:
                 if height < 1.7 {
                     features[index].resolved = true
                     pickups += 1
                     combo += 1
-                    score += 50 + min(combo, 10) * 10
+                    score += (50 + min(combo, 10) * 10) * flowMultiplier
                     announce("+ STAR", kind: "pickup")
                 }
             case .checkpoint:
@@ -309,6 +260,8 @@ struct RunnerCourse: Identifiable {
                 checkpointManualLines = manualLines
                 checkpointNoseLines = noseLines
                 checkpointElapsed = elapsed
+                checkpointFlowEnergy = flowEnergy
+                checkpointCombo = combo
                 announce("CHECKPOINT", kind: "checkpoint")
             }
         }
@@ -327,26 +280,27 @@ struct RunnerCourse: Identifiable {
         let feature = features[index]
         features[index].resolved = true
         switch feature.kind {
-        case .gap, .barrier, .overhead:
+        case .gap, .longGap, .barrier, .overhead, .pulseGate:
             if !feature.failed {
                 combo += 1
-                score += min(combo, 10) * 75
+                score += min(combo, 10) * 75 * flowMultiplier
                 announce(combo > 1 ? "FLOW x\(combo)" : "CLEAN!", kind: "clear")
             }
         case .manualLine, .noseLine:
             if feature.exposure >= 0.10 &&
                 feature.heldTime >= feature.exposure * 0.65 {
                 combo += 1
-                score += 180 + min(combo, 10) * 20
+                score += (180 + min(combo, 10) * 20) * flowMultiplier
                 if feature.kind == .manualLine { manualLines += 1 }
                 else { noseLines += 1 }
                 announce(feature.kind == .manualLine ?
                          "MANUAL LINE!" : "NOSE MANUAL!", kind: "line")
             } else {
                 combo = 0
+                flowEnergy = max(0, flowEnergy - 0.35)
                 announce("Balance line missed", kind: "miss")
             }
-        case .checkpoint, .pickup:
+        case .checkpoint, .pickup, .springPad:
             break
         }
     }
@@ -359,6 +313,7 @@ struct RunnerCourse: Identifiable {
         lives -= 1
         damageCount += 1
         combo = 0
+        flowEnergy = 0
         invulnerabilityTime = 1.0
         announce(lives == 0 ? "WIPEOUT" : "BAIL! KEEP MOVING", kind: "damage")
         if lives <= 0 { gameOver = true }

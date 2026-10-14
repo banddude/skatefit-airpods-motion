@@ -9,7 +9,7 @@ struct RunnerSceneView: View {
     let highContrast: Bool
 
     private var theme: (Color, Color, Color) {
-        switch engine.level {
+        switch engine.course.worldNumber {
         case 2: return (Color(red: 0.14, green: 0.12, blue: 0.27),
                         Color(red: 0.37, green: 0.19, blue: 0.39), .orange)
         case 3: return (Color(red: 0.04, green: 0.06, blue: 0.24),
@@ -109,9 +109,13 @@ struct RunnerSceneView: View {
             let itemWidth = max(6, CGFloat(feature.length) * scale)
             if x > w + 50 || x + itemWidth < -50 { continue }
             switch feature.kind {
-            case .gap:
+            case .gap, .longGap:
                 rectangle(&context, CGRect(x: x, y: ground - 2,
                     width: itemWidth, height: h - ground + 3), color: .black)
+                if feature.kind == .longGap {
+                    rectangle(&context, CGRect(x: x, y: ground + 7,
+                        width: itemWidth, height: 3), color: .pink.opacity(0.60))
+                }
                 rectangle(&context, CGRect(x: x - 2, y: ground - 12,
                     width: 3, height: 12), color: .orange)
                 rectangle(&context, CGRect(x: x + itemWidth - 1, y: ground - 12,
@@ -123,13 +127,33 @@ struct RunnerSceneView: View {
                     rectangle(&context, CGRect(x: x + 3, y: ground - 29 + CGFloat(stripe) * 10,
                         width: max(1, itemWidth - 6), height: 3), color: .white.opacity(0.55))
                 }
-            case .overhead:
+            case .overhead, .pulseGate:
+                let active = feature.kind == .overhead || engine.pulseGateActive(feature)
+                let gateColor: Color = active ? (highContrast ? .white : .purple) :
+                    .cyan.opacity(0.32)
                 rectangle(&context, CGRect(x: x, y: ground - 67,
-                    width: itemWidth, height: 13), color: highContrast ? .white : .purple)
+                    width: itemWidth, height: 13), color: gateColor)
                 rectangle(&context, CGRect(x: x, y: ground - 67,
-                    width: itemWidth, height: 3), color: highContrast ? .yellow : .pink)
+                    width: itemWidth, height: 3), color: active ? .pink : .mint)
                 rectangle(&context, CGRect(x: x + itemWidth - 4, y: ground - 55,
-                    width: 4, height: 55), color: highContrast ? .white : .purple.opacity(0.7))
+                    width: 4, height: 55), color: gateColor.opacity(0.7))
+                if feature.kind == .pulseGate {
+                    circle(&context, x: x + itemWidth / 2, y: ground - 80,
+                           radius: 6, color: active ? .red : .green)
+                }
+            case .springPad:
+                rectangle(&context, CGRect(x: x, y: ground - 7,
+                    width: itemWidth, height: 8), color: highContrast ? .white : .green)
+                for chevron in 0..<3 {
+                    let centerX = x + CGFloat(chevron) * itemWidth / 3
+                    let path = Path { path in
+                        path.move(to: CGPoint(x: centerX + 3, y: ground - 20))
+                        path.addLine(to: CGPoint(x: centerX + 11, y: ground - 29))
+                        path.addLine(to: CGPoint(x: centerX + 18, y: ground - 20))
+                    }
+                    context.stroke(path, with: .color(.white),
+                                   style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                }
             case .manualLine, .noseLine:
                 let lineColor: Color = feature.kind == .manualLine ? .yellow : .cyan
                 rectangle(&context, CGRect(x: x, y: ground - 5,
@@ -163,14 +187,20 @@ struct RunnerSceneView: View {
         }
 
         // Longboard-like hero with an animated rider silhouette.
-        let heroY = ground - 10 - CGFloat(engine.height) * 41
+        let heroY = ground - 10 - CGFloat(min(engine.height, 2.8)) * 41
         if engine.invulnerabilityTime == 0 ||
            Int(engine.elapsed * 12).isMultiple(of: 2) {
             let deckY = heroY + (engine.crouching ? 6 : 0)
-            rectangle(&context, CGRect(x: playerX - 21, y: deckY,
-                width: 51, height: 6), color: deckColor)
-            rectangle(&context, CGRect(x: playerX - 19, y: deckY - 2,
-                width: 47, height: 2), color: .white.opacity(0.7))
+            let tilt: CGFloat = engine.manualing && engine.height < 0.2 ? -7 : 0
+            let deckPath = Path { path in
+                path.move(to: CGPoint(x: playerX - 21, y: deckY + 6))
+                path.addLine(to: CGPoint(x: playerX + 30, y: deckY + 6 + tilt))
+                path.addLine(to: CGPoint(x: playerX + 30, y: deckY + tilt))
+                path.addLine(to: CGPoint(x: playerX - 21, y: deckY))
+                path.closeSubpath()
+            }
+            context.fill(deckPath, with: .color(deckColor))
+            context.stroke(deckPath, with: .color(.white.opacity(0.5)), lineWidth: 1)
             circle(&context, x: playerX - 11, y: deckY + 9,
                    radius: 5.2, color: .white)
             circle(&context, x: playerX + 19, y: deckY + 9,
@@ -194,6 +224,13 @@ struct RunnerSceneView: View {
             }
             context.stroke(knees, with: .color(.white), style: StrokeStyle(
                 lineWidth: 4, lineCap: .round))
+            if engine.flowMultiplier > 1 && !reduceMotion {
+                for spark in 0..<5 {
+                    circle(&context, x: playerX - 28 - CGFloat(spark) * 12,
+                           y: heroY + CGFloat(spark % 3) * 7,
+                           radius: 2, color: .yellow.opacity(0.8 - Double(spark) * 0.1))
+                }
+            }
             if engine.height > 0.1 {
                 for spark in 0..<3 {
                     circle(&context, x: playerX - 26 - CGFloat(spark) * 10,
