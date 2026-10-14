@@ -136,6 +136,10 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
             RunnerMotionFreshness.isReady(lastSample: lastGamePitchAt,
                                           now: ProcessInfo.processInfo.systemUptime)
     }
+    /// Monotonic host receipt timestamp for the latest published board pose.
+    /// Shared only for approximate pairing with AR camera receipt times.
+    var lastBoardPoseUptime: TimeInterval? { lastGamePitchAt }
+
     var liveDashboardURL: URL { TelemetryUploader.dashboardURL }
 
     func savedCSV(for session: SavedSkateSession) -> URL {
