@@ -104,6 +104,47 @@ final class RunnerTests: XCTestCase {
         XCTAssertEqual(game.damageCount, 0)
     }
 
+    func testEveryCourseHasACompletePerfectRunTrace() {
+        // A deterministic trace proves that all obstacles are beatable with
+        // a real input window. This does not claim that human timing is easy.
+        for course in RunnerCourse.catalog {
+            let game = RunnerEngine()
+            game.reset(course: course.id)
+            var steps = 0
+            while !game.gameOver && steps < 100_000 {
+                let d = game.distance
+                var manual = false
+                var nose = false
+                for item in course.features where item.at < d + 7 &&
+                            item.end > d - 1 {
+                    switch item.kind {
+                    case .gap, .barrier:
+                        manual = manual ||
+                            (d >= item.at - 1.3 && d <= item.end + 0.4)
+                    case .overhead:
+                        nose = nose ||
+                            (d >= item.at - 0.9 && d <= item.end + 0.4)
+                    case .manualLine:
+                        manual = manual ||
+                            (d >= item.at - 5.5 && d <= item.end + 0.4)
+                    case .noseLine:
+                        nose = nose ||
+                            (d >= item.at - 0.9 && d <= item.end + 0.4)
+                    default: break
+                    }
+                }
+                game.advance(dt: 1.0 / 120,
+                             input: RunnerInput(manual: manual, noseManual: nose))
+                steps += 1
+            }
+            XCTAssertTrue(game.won, "World \(course.id) cannot be completed. \(game.message) at \(game.distance)")
+            XCTAssertEqual(game.damageCount, 0, "World \(course.id) has an unfair hazard")
+            XCTAssertEqual(game.stars, 3, "World \(course.id) cannot earn all three stars")
+            XCTAssertGreaterThan(game.manualLines, 0)
+            XCTAssertGreaterThan(game.noseLines, 0)
+        }
+    }
+
     func testLargeFrameStallCannotSkipWholeCourse() {
         let game = RunnerEngine()
         game.advance(dt: 500, pitch: 0)
