@@ -8,7 +8,7 @@ SkateFit Motion Lab is a public, experimental research prototype that uses the i
 
 During recording, the app collects accelerometer, gravity, angular-velocity, sensor-orientation and timestamp readings from the iPhone and connected AirPods. It also records calibration positions, candidate motion events and any experimental labels added in the web dashboard. Each recording receives a random session identifier.
 
-The app does **not** intentionally collect microphone recordings, photos, contact lists, account credentials or precise GPS location. It does not ask for user login. It does transmit sensor and timestamp data to Cloudflare through the public developer API when the cloud-sync switch is enabled (enabled by default).
+The app does **not** intentionally collect microphone recordings, photos, contact lists, account credentials or precise GPS location. It does not ask for user login. It does transmit sensor and timestamp data to Cloudflare through the public developer API only if you explicitly enable the cloud-sync switch (off by default).
 
 ## Public experimental system
 
@@ -26,6 +26,6 @@ No data is sold to advertisers, and the app does not use advertising or tracking
 
 ## Choices and contact
 
-The cloud sync switch can be turned off in the app. This does not automatically erase already-uploaded sessions. You can submit an issue at [the project's GitHub repository](https://github.com/banddude/skatefit-airpods-motion/issues) about deleting a session or making a privacy-related change.
+Cloud sync is off by default. The switch in Motion Lab → Advanced explicitly enables public experimental uploads. Turning it off also stops retrying any pending uploads until you choose to enable it again. This does not automatically erase already-uploaded sessions. You can submit an issue at [the project's GitHub repository](https://github.com/banddude/skatefit-airpods-motion/issues) about deleting a session or making a privacy-related change.
 
 This privacy notice applies only to the experimental **SkateFit Motion Lab** prototype, not the separate production SkateFit application.

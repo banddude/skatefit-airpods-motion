@@ -65,14 +65,14 @@ Verify the exported IPA by extracting it, checking that `codesign --verify --dee
 
 ```bash
 wrangler r2 object put \
-  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-6.ipa \
+  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-11.ipa \
   --file /tmp/skatefit-motion-beta-export/SkateMotion.ipa \
   --remote --content-type application/octet-stream
 
 wrangler deploy
 ```
 
-The command above illustrates the **new build 2** path. For future builds, change the object path to match the incremented version/build.
+The command above is illustrative only. The object key, manifest metadata, installer text and IPA version must all match the current build. Build 11 uses \`ios/SkateFitMotionLab-0.1.0-11.ipa\`. Never change the Worker installer to a build unless the new IPA object has been uploaded and its checksum verified.
 
 ## TestFlight transition
 
@@ -202,3 +202,11 @@ No hardware or telemetry server changes are needed.
 These are *sensor observations* and heuristic motion candidates; they are
 not skateboarding trick, landing, foot-contact or physical-location proof.
 Yaw is relative to flat calibration and may drift over time.
+
+## Beta build 11: Manual Runner
+
+- Five playable world courses with on-screen touch and optional gamepad controls, manual/nose manual challenges, collectibles, checkpoints and saved career data.
+- Calibrated AirPods motion mode remains a separate, optional beta feature requiring physical field testing.
+- New 120 Hz game simulation and repeatable five-course perfect-run tests.
+- Public experimental cloud telemetry is now opt-in, **off by default**. Any packets saved by previous versions stay locally queued until an explicit opt-in.
+- This beta is intended for one enrolled test phone and must not be mistaken for App Store readiness.

@@ -1,3 +1,15 @@
+# Manual Runner Beta 11: October 2026
+
+The SkateFit motion prototype now includes a **standalone, offline-first manual/nose-manual platform game**. It is playable with on-screen controls or supported gamepads; calibrated AirPods motion control is optional. There are five authored worlds (the first is approximately 3 minutes), jumps, ducking, manual and nose-manual balance lines, checkpoints, pickups, star ratings, an offline career save with backup recovery, cosmetics, challenges, haptics, and high-contrast/reduced-motion options.
+
+The game screen is the default and the experimental motion recorder has moved to **Settings → Open Motion Lab**. Physical-AirPods hardware behavior remains **unverified**. The game's controls do not prove landed real skateboard tricks. **Public Cloudflare raw-data uploads are now OFF by default** and require explicit consent inside Motion Lab's Advanced panel. Previously collected public beta data is not deleted by this change.
+
+[Install the ad-hoc iPhone beta](https://skatefit-motion-lab.mikejshaffer.workers.dev/install) (registered test device only) · [Commercial acceptance checklist](docs/RELEASE_CHECKLIST.md) · [Asset provenance](ASSET_LICENSES.md)
+
+**Status: feature-complete prototype, not commercially releasable.** 28 iOS simulator tests and 13 backend tests pass in the current development branch. Still needed for commercial release: actual AirPods field tests, accessibility/performance validation on multiple physical iPhones, hardened or removed public telemetry, commercial art/audio chain-of-title, app-store packaging and store review.
+
+---
+
 ## Build 6: 3-axis motion and permanent skate sessions
 
 **Latest signed iPhone beta:** https://skatefit-motion-lab.mikejshaffer.workers.dev/install
