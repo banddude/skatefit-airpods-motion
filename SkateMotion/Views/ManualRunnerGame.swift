@@ -130,6 +130,9 @@ struct ManualRunnerGame: View {
     private var invulnerable = 0.0
     private var jumpBuffer = 0.0
     private var simulationRemainder = 0.0
+    private let playerX = 3.7
+    private let playerHalfWidth = 0.38
+    private var lastHeight = 0.0
 
     func reset(course: Int = 1) {
         score = 0; lives = 3; level = max(1, min(5, course)); distance = 0
@@ -137,6 +140,7 @@ struct ManualRunnerGame: View {
         won = false; nextSpawn = 10; obstacles = []; lastPitch = 0
         spawnIndex = 0; combo = 0; invulnerable = 0; jumpBuffer = 0
         simulationRemainder = 0
+        lastHeight = 0
         message = "Ready to roll"
     }
 
@@ -167,6 +171,7 @@ struct ManualRunnerGame: View {
             jumpBuffer = 0
             message = "MANUAL JUMP!"
         }
+        lastHeight = height
         if height > 0 || velocity > 0 {
             height = max(0, height + velocity * dt)
             velocity -= 15 * dt
@@ -182,27 +187,40 @@ struct ManualRunnerGame: View {
             nextSpawn += 13 + Double(spawnIndex % 2) * 2
         }
         for i in obstacles.indices { obstacles[i].x -= speed * dt }
-        for i in obstacles.indices where !obstacles[i].resolved && obstacles[i].x <= 4.0 {
-            // Player is at x≈3.7 on the 16-unit playfield.
-            obstacles[i].resolved = true
+        for i in obstacles.indices where !obstacles[i].resolved {
             let obstacle = obstacles[i]
-            let passed: Bool
+            let left = obstacle.x - obstacle.halfWidth
+            let right = obstacle.x + obstacle.halfWidth
+            // A full overlap window avoids passing through obstacles because
+            // the player was airborne only at a single point in time.
+            let overlaps = right >= playerX - playerHalfWidth &&
+                           left <= playerX + playerHalfWidth
+            let cleared = left > playerX + playerHalfWidth
+            if !overlaps && !cleared { continue }
+            let safe: Bool
             switch obstacle.kind {
-            case .gap: passed = height > 0.48
-            case .barrier: passed = height > 0.65
-            case .overhead: passed = crouching
+            case .gap:
+                safe = min(lastHeight, height) > 0.35
+            case .barrier:
+                safe = min(lastHeight, height) > 0.60
+            case .overhead:
+                safe = crouching && height < 0.12
             }
-            if passed {
+            if overlaps && !safe {
+                obstacles[i].resolved = true
+                combo = 0
+                if invulnerable <= 0 {
+                    lives -= 1
+                    invulnerable = 1.0
+                    message = "OUCH!"
+                    if lives <= 0 { gameOver = true; message = "GAME OVER" }
+                }
+            } else if cleared {
+                obstacles[i].resolved = true
                 combo += 1
                 score += 100 * min(5, combo)
                 message = combo > 1 ? "COMBO x\(combo)!" :
                     (obstacle.kind == .overhead ? "NOSE MANUAL!" : "CLEAN!")
-            } else if invulnerable == 0 {
-                lives -= 1
-                combo = 0
-                invulnerable = 1.0
-                message = "OUCH!"
-                if lives <= 0 { gameOver = true; message = "GAME OVER" }
             }
         }
         obstacles.removeAll { $0.x < -3 }
@@ -221,6 +239,13 @@ struct RunnerObstacle: Identifiable {
     var x: Double
     let kind: Kind
     var resolved = false
+    var halfWidth: Double {
+        switch kind {
+        case .gap: return 0.7
+        case .barrier: return 0.35
+        case .overhead: return 0.65
+        }
+    }
 }
 
 struct RunnerSceneView: View {
