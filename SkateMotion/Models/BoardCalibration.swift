@@ -114,16 +114,14 @@ struct BoardCalibration {
                 headingAvailable = true
             }
         }
-        let relative = flatAttitude.flatMap { reference in
-            sample.quaternion.flatMap { current in
-                guard BoardPoseMath.attitudeAgreesWithGravity(
-                    reference: reference, current: current,
-                    calibratedFlatDown: flat, measuredDown: sample.gravity
-                ) else { return nil }
-                return BoardPoseMath.relativeRotation(
-                    reference: reference, current: current,
-                    length: length, width: width, down: flat)
-            }
+        var relative: Quaternion4?
+        if let reference = flatAttitude, let current = sample.quaternion,
+           BoardPoseMath.attitudeAgreesWithGravity(
+               reference: reference, current: current,
+               calibratedFlatDown: flat, measuredDown: sample.gravity) {
+            relative = BoardPoseMath.relativeRotation(
+                reference: reference, current: current,
+                length: length, width: width, down: flat)
         }
         let gravityRotation = BoardPoseMath.gravityOnlyRotation(
             measuredGravity: sample.gravity, length: length, width: width,
