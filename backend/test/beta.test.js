@@ -52,7 +52,7 @@ test("signed beta binary and icon stream through R2 over GET and HEAD", async ()
     assert.equal(Number(response.headers.get("content-length")), 4);
     assert.equal((await response.arrayBuffer()).byteLength, method === "GET" ? 4 : 0);
   }
-  assert.deepEqual(calls, ["ios/SkateFitMotionLab-0.1.0-8.ipa", "ios/SkateFitMotionLab-0.1.0-8.ipa"]);
+  assert.deepEqual(calls, ["ios/SkateFitMotionLab-0.1.0-9.ipa", "ios/SkateFitMotionLab-0.1.0-9.ipa"]);
 });
 
 test("iOS partial downloads honor byte ranges and reject invalid requests", async () => {

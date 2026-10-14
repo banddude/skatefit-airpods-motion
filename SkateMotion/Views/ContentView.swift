@@ -7,6 +7,7 @@ struct ContentView: View {
     @StateObject private var store = MotionStore()
     @State private var showAdvanced = false
     @State private var gameMode = true
+    @State private var showRunner = true
     @State private var showConnectionHelp = false
 
     private let calibrationOrder: [CalibrationPose] = [.wheelsDown, .tailContact, .noseContact]
@@ -76,6 +77,7 @@ struct ContentView: View {
 
     private var gameHome: some View {
         VStack(alignment: .leading, spacing: 18) {
+            ManualRunnerGame(store: store)
             VStack(alignment: .leading, spacing: 6) {
                 Text("SKATE SESSION")
                     .font(.caption.weight(.bold)).foregroundStyle(.teal)
