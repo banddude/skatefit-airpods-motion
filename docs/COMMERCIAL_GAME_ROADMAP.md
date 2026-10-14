@@ -3,6 +3,10 @@
 ## Product promise
 A complete 2.5D platform adventure with a real skateboarding motion controller, optional touch controls, and a polished game that remains fun without an AirPod. Keep the actual game separate from the AirPod diagnostics and motion lab.
 
+## Beta 13: manual-first skill development
+
+Manual Balance Coach is now a prominent primary activity alongside the platform game. It has live board-oriented 3D rotation from a calibrated relative quaternion, inversion detection, controllable manual-angle targets, timed holds, lateral wobble, gyro-based correction metrics, local per-session progress, and opt-in foreground iPhone GPS speed. All this is orientation-only evidence, **not confirmed grounded wheel contact or rider foot placement**. Future physical coaching validation should compare each hold and timing against reference video, then prioritize stationary camera optical tracking or dedicated wheel-contact hardware before claiming real trick success. See [spatial tracking and manuals](SPATIAL_TRACKING_AND_MANUALS.md).
+
 ## Beta 12 implementation update
 
 - Expanded from one course per world to 15 courses, three per world, retaining beta-11 save identifiers 1...5.

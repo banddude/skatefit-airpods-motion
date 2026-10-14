@@ -65,14 +65,14 @@ Verify the exported IPA by extracting it, checking that `codesign --verify --dee
 
 ```bash
 wrangler r2 object put \
-  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-12.ipa \
+  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-13.ipa \
   --file /tmp/skatefit-motion-beta-export/SkateMotion.ipa \
   --remote --content-type application/octet-stream
 
 wrangler deploy
 ```
 
-The command above is illustrative only. The object key, manifest metadata, installer text and IPA version must all match the current build. Build 12 uses \`ios/SkateFitMotionLab-0.1.0-12.ipa\`. Never change the Worker installer to a build unless the new IPA object has been uploaded and its checksum verified.
+The command above is illustrative only. The object key, manifest metadata, installer text and IPA version must all match the current build. Build 13 uses \`ios/SkateFitMotionLab-0.1.0-13.ipa\`. Never change the Worker installer to a build unless the new IPA object has been uploaded and its checksum verified.
 
 ## TestFlight transition
 
@@ -217,3 +217,12 @@ Yaw is relative to flat calibration and may drift over time.
 - Motion controller decoupled from diagnostics display throttling: up to 30 Hz game pitch with 0.75-second freshness check and tilt hysteresis.
 - Added end-to-end XCUITest flows for normal game use, stage selection and Motion Lab navigation. This is still an ad-hoc beta, not a public App Store release.
 - Beta 11 career files are retained. The experimental public Cloudflare telemetry remains opt-in only.
+
+
+## Beta build 13: Manual Balance Coach and 3D board inversion
+
+- Calibrated all-axis relative quaternion drives the SceneKit skateboard, retaining 180° upside-down and full-flip orientation. A gravity-only fallback indicates incomplete rotation observability.
+- New Manual Balance Coach records orientation-qualified manual and nose-manual holds, technique metrics, target ranges, local personal bests, and haptic hold-goal feedback. It does NOT prove real grounded manuals.
+- Added an explicit opt-in, foreground-only Core Location outdoor iPhone speed display. No coordinates or location route are stored or uploaded.
+- Added tests for full 360° rotation, nose-up sign, rejected invalid/contradictory attitudes, sensor dropouts, excluded phone data, and training history.
+- The separate production SkateFit app remains unchanged. AirPods off-ear sensor operation and commercial release still require hardware field tests.

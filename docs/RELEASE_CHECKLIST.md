@@ -52,6 +52,7 @@ xcodebuild -project SkateMotion.xcodeproj -scheme SkateMotion -destination 'plat
 
 - [x] Calibrated complete relative quaternion drives 3D board orientation, including upside-down flips.
 - [x] Gravity-only inversion fallback explicitly signals loss of fused attitude.
+- [x] Stationary calibration gate rejects shaking, timestamp gaps and sideways nose/tail poses.
 - [x] Manual and nose manual pose-hold coach with target, wobble RMS, lateral tilt, per-axis angular rates and local best-session history.
 - [x] Optional foreground iPhone GPS speed with explicit permission and no stored coordinates.
 - [ ] Physical deck-mounted AirPods confirmation of pitch sign, full inversion, gyro orientation, sample rates and score accuracy.

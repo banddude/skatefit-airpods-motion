@@ -19,7 +19,7 @@ Updated 2026-10-13. This is the engineering contract behind Manual Balance Coach
 
 ## Orientation mathematics
 
-- Calibration captures the 3 poses flat, tail down and nose down with one AirPod rigidly mounted. Those gravity vectors define a skateboard-local orthonormal basis (nose axis, deck normal, width axis).
+- Calibration captures the 3 poses flat, tail down and nose down with one AirPod rigidly mounted. Three-axis gyroscope/acceleration and gravity variance checks require 1.5 seconds of continuous stationary data for each pose; moving or inconsistent/sideways reference poses are rejected. Those gravity vectors define a skateboard-local orthonormal basis (nose axis, deck normal, width axis).
 - On each board-mounted AirPod device-motion reading, rotate those axes using the fused attitude quaternion. Compare the **current** basis against the **reference** basis; create a relative orientation matrix and convert it to a quaternion used directly by SceneKit.
 - Crucially, do not reconstruct the final model from independent pitch and roll Euler angles. That approach becomes ambiguous during flips and can double-count the same inversion. Use the calibrated quaternion for full orientation.
 - Gravity alignment between the current measured gravity and calibrated flat gravity determines whether the deck is wheels-down, on its edge, or inverted. Without fused attitude, it can still detect inversion, but cannot determine which way the deck flipped around its length or width when precisely upside down.

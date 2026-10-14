@@ -70,7 +70,14 @@ struct BoardCalibration {
               let length = lengthAxis else { return false }
         let tailTilt = acos(max(-1, min(1, flat.dot(tail)))) * 180 / .pi
         let noseTilt = acos(max(-1, min(1, flat.dot(nose)))) * 180 / .pi
-        return tailTilt > 5 && noseTilt > 5 &&
+        // Contact poses must tilt primarily in opposing directions along
+        // the deck. A sideways roll or two similar poses are not a credible
+        // nose/tail calibration, even if each is >5 degrees from flat.
+        let tailProjected = (tail - flat * tail.dot(flat)).normalized
+        let noseProjected = (nose - flat * nose.dot(flat)).normalized
+        guard let tailProjected, let noseProjected else { return false }
+        return (7...65).contains(tailTilt) && (7...65).contains(noseTilt) &&
+            tailProjected.dot(noseProjected) < -0.80 &&
             (tail - flat).dot(length) > 0 && (nose - flat).dot(length) < 0
     }
 
