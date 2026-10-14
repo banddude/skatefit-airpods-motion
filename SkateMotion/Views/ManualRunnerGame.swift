@@ -129,19 +129,31 @@ struct ManualRunnerGame: View {
     private var spawnIndex = 0
     private var invulnerable = 0.0
     private var jumpBuffer = 0.0
+    private var simulationRemainder = 0.0
 
     func reset(course: Int = 1) {
         score = 0; lives = 3; level = max(1, min(5, course)); distance = 0
         height = 0; velocity = 0; crouching = false; gameOver = false
         won = false; nextSpawn = 10; obstacles = []; lastPitch = 0
         spawnIndex = 0; combo = 0; invulnerable = 0; jumpBuffer = 0
+        simulationRemainder = 0
         message = "Ready to roll"
     }
 
     func advance(dt rawDt: Double, pitch: Double) {
-        guard !gameOver else { return }
-        let dt = min(0.05, max(0, rawDt))
-        guard dt > 0 else { return }
+        guard !gameOver, rawDt.isFinite, pitch.isFinite else { return }
+        // Fixed-timestep simulation is reproducible across 30/60/120 Hz displays.
+        simulationRemainder += min(0.15, max(0, rawDt))
+        let step = 1.0 / 120.0
+        var iterations = 0
+        while simulationRemainder >= step && iterations < 18 && !gameOver {
+            advanceStep(dt: step, pitch: pitch)
+            simulationRemainder -= step
+            iterations += 1
+        }
+    }
+
+    private func advanceStep(dt: Double, pitch: Double) {
         let speed = 4.0 + Double(level) * 0.35
         distance += speed * dt
         invulnerable = max(0, invulnerable - dt)
@@ -170,7 +182,7 @@ struct ManualRunnerGame: View {
             nextSpawn += 13 + Double(spawnIndex % 2) * 2
         }
         for i in obstacles.indices { obstacles[i].x -= speed * dt }
-        for i in obstacles.indices where !obstacles[i].resolved && obstacles[i].x < 3.5 {
+        for i in obstacles.indices where !obstacles[i].resolved && obstacles[i].x <= 4.0 {
             // Player is at x≈3.7 on the 16-unit playfield.
             obstacles[i].resolved = true
             let obstacle = obstacles[i]

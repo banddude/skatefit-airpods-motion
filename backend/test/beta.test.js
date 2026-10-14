@@ -11,7 +11,7 @@ test("iPhone installer exposes a Safari install link", () => {
 
 test("OTA manifest uses the same bundle ID and hosted IPA as the archive", () => {
   assert.match(installManifest, /com\.banddude\.skatefit\.motionlab/);
-  assert.match(installManifest, /<string>8<\/string>/);
+  assert.match(installManifest, /<string>10<\/string>/);
   assert.match(installManifest, /https:\/\/skatefit-motion-lab\.mikejshaffer\.workers\.dev\/beta\/SkateFitMotionLab\.ipa/);
 });
 
