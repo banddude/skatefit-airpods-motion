@@ -6,6 +6,7 @@ import AVKit
 struct ContentView: View {
     @StateObject private var store = MotionStore()
     @State private var showAdvanced = false
+    @State private var gameMode = true
     @State private var showConnectionHelp = false
 
     private let calibrationOrder: [CalibrationPose] = [.wheelsDown, .tailContact, .noseContact]
@@ -22,6 +23,14 @@ struct ContentView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    Picker("Screen", selection: $gameMode) {
+                        Text("Skate").tag(true)
+                        Text("Setup & Lab").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    if gameMode {
+                        gameHome
+                    } else {
                     connectionBanner
 
                     if !store.hasCalibration {
@@ -54,6 +63,7 @@ struct ContentView: View {
                     }
 
                     advancedCard
+                    }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 18)
@@ -61,6 +71,44 @@ struct ContentView: View {
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("SkateFit")
             .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private var gameHome: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("SKATE SESSION")
+                    .font(.caption.weight(.bold)).foregroundStyle(.teal)
+                Text(store.isRecording ? "You're skating" : "Ready to skate?")
+                    .font(.largeTitle.weight(.bold))
+                Text(store.hasCalibration ? "Track your moves, build your stats." :
+                     "Set up your board once, then start skating.")
+                    .foregroundStyle(.secondary)
+            }
+            if store.hasCalibration {
+                Board3DCard(orientation: store.latestOrientation, recording: store.isRecording)
+                SessionStatisticsCard(stats: store.liveStatistics, recording: store.isRecording)
+            } else {
+                Label("Board calibration needed", systemImage: "airpodspro")
+                    .foregroundStyle(.orange)
+                    .padding()
+            }
+            if store.hasCalibration {
+                recordingControls
+            } else {
+                Button("Set up my board") { gameMode = false }
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity)
+            }
+            HStack {
+                Label("Possible tricks", systemImage: "bolt.fill")
+                Spacer()
+                Text("\(store.liveStatistics.possibleEvents)")
+                    .font(.title2.bold()).monospacedDigit()
+            }.padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+            savedSessionsButton
+            Button("Board settings & calibration") { gameMode = false }
+                .font(.subheadline)
         }
     }
 
