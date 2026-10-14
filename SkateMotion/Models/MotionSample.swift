@@ -1,5 +1,6 @@
 import CoreMotion
 import Foundation
+import simd
 
 /// Three-dimensional vector in sensor coordinates. User acceleration is expressed in g,
 /// angular velocity in rad/s, gravity in g, and time in seconds.
@@ -37,6 +38,26 @@ struct Vector3: Codable, Equatable {
     }
 }
 
+/// Core Motion's fused device-to-reference attitude, saved as a unit quaternion.
+/// The reference heading is relative and may drift; it is NOT compass heading.
+struct Quaternion4: Codable, Equatable {
+    let w: Double
+    let x: Double
+    let y: Double
+    let z: Double
+
+    static let identity = Quaternion4(w: 1, x: 0, y: 0, z: 0)
+
+    func rotate(_ vector: Vector3) -> Vector3 {
+        let length = sqrt(w*w + x*x + y*y + z*z)
+        guard length > 1e-10 else { return vector }
+        let q = simd_quatd(real: w / length,
+                           imag: SIMD3<Double>(x / length, y / length, z / length))
+        let rotated = q.act(SIMD3<Double>(vector.x, vector.y, vector.z))
+        return Vector3(x: rotated.x, y: rotated.y, z: rotated.z)
+    }
+}
+
 enum MotionSource: String, Codable {
     case headphone
     case phone
@@ -64,10 +85,13 @@ struct MotionSample: Codable {
     let pitch: Double
     let roll: Double
     let yaw: Double
+    /// Optional to decode already queued pre-v6 sessions across app upgrades.
+    let quaternion: Quaternion4?
 
     init(source: MotionSource, sensorLocation: String, hostUptime: TimeInterval,
          deviceTimestamp: TimeInterval, gravity: Vector3, acceleration: Vector3,
-         rotationRate: Vector3, pitch: Double = 0, roll: Double = 0, yaw: Double = 0) {
+         rotationRate: Vector3, pitch: Double = 0, roll: Double = 0,
+         yaw: Double = 0, quaternion: Quaternion4? = nil) {
         self.source = source
         self.sensorLocation = sensorLocation
         self.hostUptime = hostUptime
@@ -78,6 +102,7 @@ struct MotionSample: Codable {
         self.pitch = pitch
         self.roll = roll
         self.yaw = yaw
+        self.quaternion = quaternion
     }
 
     init(motion: CMDeviceMotion, source: MotionSource, receivedAt: TimeInterval) {
@@ -99,7 +124,12 @@ struct MotionSample: Codable {
                                   y: motion.rotationRate.y, z: motion.rotationRate.z),
             pitch: motion.attitude.pitch,
             roll: motion.attitude.roll,
-            yaw: motion.attitude.yaw
+            yaw: motion.attitude.yaw,
+            quaternion: Quaternion4(
+                w: motion.attitude.quaternion.w,
+                x: motion.attitude.quaternion.x,
+                y: motion.attitude.quaternion.y,
+                z: motion.attitude.quaternion.z)
         )
     }
 
@@ -110,12 +140,16 @@ struct MotionSample: Codable {
             String(gravity.x), String(gravity.y), String(gravity.z),
             String(acceleration.x), String(acceleration.y), String(acceleration.z),
             String(rotationRate.x), String(rotationRate.y), String(rotationRate.z),
-            String(pitch), String(roll), String(yaw)
+            String(pitch), String(roll), String(yaw),
+            quaternion.map { String($0.w) } ?? "",
+            quaternion.map { String($0.x) } ?? "",
+            quaternion.map { String($0.y) } ?? "",
+            quaternion.map { String($0.z) } ?? ""
         ]
         return parts.joined(separator: ",")
     }
 
-    static let csvHeader = "host_uptime_s,device_timestamp_s,source,sensor_location,gravity_x_g,gravity_y_g,gravity_z_g,user_accel_x_g,user_accel_y_g,user_accel_z_g,rotation_x_rad_s,rotation_y_rad_s,rotation_z_rad_s,pitch_rad,roll_rad,yaw_rad"
+    static let csvHeader = "host_uptime_s,device_timestamp_s,source,sensor_location,gravity_x_g,gravity_y_g,gravity_z_g,user_accel_x_g,user_accel_y_g,user_accel_z_g,rotation_x_rad_s,rotation_y_rad_s,rotation_z_rad_s,pitch_rad,roll_rad,yaw_rad,quaternion_w,quaternion_x,quaternion_y,quaternion_z"
 }
 
 struct TrickEvent: Identifiable, Codable {

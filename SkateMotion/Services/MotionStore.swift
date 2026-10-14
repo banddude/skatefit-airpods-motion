@@ -60,6 +60,12 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     @Published private(set) var audioWakeStatus = "Not yet played."
     @Published private(set) var calibrationProgress: Double = 0
     @Published private(set) var latestPitch: Double?
+    @Published private(set) var latestOrientation: BoardOrientation?
+    @Published private(set) var latestBoardAcceleration: Vector3?
+    @Published private(set) var latestBoardRotationRate: Vector3?
+    @Published private(set) var liveStatistics = SessionStatistics()
+    @Published private(set) var savedSessions: [SavedSkateSession] = []
+    @Published private(set) var sessionStartedAt: Date?
     @Published private(set) var calibration = BoardCalibration()
     @Published private(set) var calibrationPose: CalibrationPose?
     @Published private(set) var events: [TrickEvent] = []
@@ -68,6 +74,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     private let headphone = CMHeadphoneMotionManager()
     private let phone = CMMotionManager()
     private let cloud = TelemetryUploader()
+    private let archive = SessionArchive()
     private let audioWake = AirPodAudioWake()
     private var subscriptions = Set<AnyCancellable>()
     private let queue: OperationQueue = {
@@ -77,24 +84,28 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         return q
     }()
 
-    private var samples: [MotionSample] = []
     private var pendingCloudSamples: [MotionSample] = []
     private var pendingCloudEvents: [TrickEvent] = []
     private var detector = TrickDetector()
     private var calibrationGravities: [Vector3] = []
+    private var calibrationLastAttitude: Quaternion4?
     private var calibrationStart: TimeInterval?
     private var calibrationRequestedAt: TimeInterval?
     private var lastHeadphoneReadingAt: TimeInterval?
     private var monitorTask: Task<Void, Never>?
     private var lastHeadphoneStreamStart: TimeInterval?
     private var lastUIUpdate = 0.0
+    private var lastStatisticsUpdate = 0.0
     private var isSyntheticDemo = false
-    private let maxSamples = 180_000
 
     var hasCalibration: Bool { calibration.isPhysicallyPlausible }
     var headphoneAvailable: Bool { headphone.isDeviceMotionAvailable }
     var phoneAvailable: Bool { phone.isDeviceMotionAvailable }
     var liveDashboardURL: URL { TelemetryUploader.dashboardURL }
+
+    func savedCSV(for session: SavedSkateSession) -> URL {
+        archive.fileURL(for: session)
+    }
     /// True only when the selected board AirPod has delivered a recent reading.
     /// Do not confuse an active Core Motion manager with actual sensor data.
     var boardSensorReady: Bool {
@@ -110,6 +121,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
 
     override init() {
         super.init()
+        savedSessions = archive.history
         if let saved = UserDefaults.standard.string(forKey: Self.boardSideKey),
            let savedSide = HeadphoneSide(rawValue: saved) {
             boardSide = savedSide
@@ -140,7 +152,15 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         guard !isRecording else { return }
         resetSession()
         calibration = BoardCalibration()
-        sessionId = UUID().uuidString
+        let newSessionId = UUID().uuidString
+        do {
+            try archive.begin(id: newSessionId, boardSide: boardSide.rawValue, synthetic: false)
+        } catch {
+            status = "Could not save session locally: \(error.localizedDescription)"
+            return
+        }
+        sessionId = newSessionId
+        sessionStartedAt = archive.current?.startedAt
         isRecording = true
         UIApplication.shared.isIdleTimerDisabled = true
         phone.deviceMotionUpdateInterval = 1.0 / 100.0
@@ -188,13 +208,22 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         calibrationProgress = 0
         calibrationGravities.removeAll()
         stagePendingTelemetry()
-        isSyntheticDemo = false
         do {
-            exportedFile = try exportCSV()
-            status = "Saved \(samples.count) rows and \(events.count) possible events. Share CSV below."
+            if let summary = try archive.finish(calibrated: calibration.isPhysicallyPlausible) {
+                exportedFile = archive.fileURL(for: summary)
+                liveStatistics = summary.stats
+                savedSessions = archive.history
+                if cloudSyncEnabled && !isSyntheticDemo {
+                    _ = cloud.enqueueSummary(summary)
+                }
+                status = "Saved \(summary.stats.boardSamples) board and \(summary.stats.phoneSamples) phone readings, \(summary.stats.possibleEvents) possible events."
+            } else {
+                status = "Recording stopped. No active archive to save."
+            }
         } catch {
-            status = "Stopped, but export failed: \(error.localizedDescription)"
+            status = "Stopped, but saving the session failed: \(error.localizedDescription)"
         }
+        isSyntheticDemo = false
     }
 
     /// Allows a new guided calibration without ending the current session.
@@ -204,8 +233,10 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         calibrationStart = nil
         calibrationRequestedAt = nil
         calibrationGravities = []
+        calibrationLastAttitude = nil
         calibrationProgress = 0
         latestPitch = nil
+        latestOrientation = nil
         detector.reset()
         status = "Hold the board in each reference position to recalibrate."
     }
@@ -234,6 +265,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         calibrationRequestedAt = ProcessInfo.processInfo.systemUptime
         calibrationProgress = 0
         calibrationGravities = []
+        calibrationLastAttitude = nil
         status = "Hold \(pose.rawValue.lowercased()) steady for about 1.5 seconds."
     }
 
@@ -378,12 +410,6 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
 
     private func receive(_ sample: MotionSample) {
         guard isRecording else { return }
-        if samples.count >= maxSamples {
-            stopRecording()
-            status = "Recording stopped at \(maxSamples) samples to protect memory. Export and start another session."
-            return
-        }
-        samples.append(sample)
         if !isSyntheticDemo && cloudSyncEnabled {
             pendingCloudSamples.append(sample)
             if pendingCloudSamples.count >= 120 { stagePendingTelemetry() }
@@ -391,6 +417,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
 
         if sample.source == .phone {
             phoneSampleCount += 1
+            saveSample(sample, isBoard: false, orientation: nil)
             return
         }
         // Record all sources for diagnostics, but never classify the ear-worn
@@ -415,11 +442,13 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
             // the hard-coded Left default, and remember it next session.
             if let detected = HeadphoneSide(rawValue: sample.sensorLocation) {
                 boardSide = detected
+                archive.setBoardSide(detected.rawValue)
                 status = "Detected \(detected.title) AirPod motion. Ready to calibrate."
             }
         }
         if sample.source == .headphone && sample.sensorLocation != boardSide.rawValue {
             rejectedHeadphoneCount += 1
+            saveSample(sample, isBoard: false, orientation: nil)
             if sample.hostUptime - lastUIUpdate > 0.5 {
                 status = "Motion source is \(sample.sensorLocation), but \(boardSide.rawValue) is mounted. Ignoring for classification."
                 lastUIUpdate = sample.hostUptime
@@ -427,17 +456,21 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
             return
         }
         boardSampleCount += 1
+        let motionOrientation = calibration.orientation(for: sample)
 
         if let pose = calibrationPose {
             if calibrationStart == nil { calibrationStart = sample.hostUptime }
             calibrationGravities.append(sample.gravity)
+            calibrationLastAttitude = sample.quaternion
             if let start = calibrationStart {
                 calibrationProgress = min(1, max(0, (sample.hostUptime - start) / 1.5))
             }
             if let start = calibrationStart, sample.hostUptime - start >= 1.5 {
                 let total = calibrationGravities.reduce(Vector3.zero, +)
                 let mean = total * (1.0 / Double(calibrationGravities.count))
-                calibration.set(pose, gravity: mean)
+                calibration.set(pose, gravity: mean,
+                                attitude: calibrationLastAttitude)
+                calibrationLastAttitude = nil
                 calibrationPose = nil
                 calibrationStart = nil
                 calibrationRequestedAt = nil
@@ -452,16 +485,37 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
             let detected = detector.accept(sample, calibration: calibration)
             events.append(contentsOf: detected)
             pendingCloudEvents.append(contentsOf: detected)
+            archive.noteEvents(detected)
         }
 
+        saveSample(sample, isBoard: true, orientation: motionOrientation)
+
         if sample.hostUptime - lastUIUpdate > 0.15 {
-            latestPitch = calibration.pitchDegrees(gravity: sample.gravity)
+            latestOrientation = motionOrientation
+            latestBoardAcceleration = sample.acceleration
+            latestBoardRotationRate = sample.rotationRate
+            latestPitch = motionOrientation?.pitchDegrees
             lastUIUpdate = sample.hostUptime
         }
     }
 
+    private func saveSample(_ sample: MotionSample, isBoard: Bool,
+                            orientation: BoardOrientation?) {
+        do {
+            try archive.observe(sample, acceptedBoard: isBoard,
+                                calibration: calibration, orientation: orientation)
+            // Avoid triggering SwiftUI re-renders for every sensor callback.
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - lastStatisticsUpdate >= 0.35 {
+                liveStatistics = archive.current?.stats ?? liveStatistics
+                lastStatisticsUpdate = now
+            }
+        } catch {
+            status = "Session storage issue: \(error.localizedDescription)"
+        }
+    }
+
     private func resetSession() {
-        samples.removeAll(keepingCapacity: true)
         pendingCloudSamples.removeAll(keepingCapacity: true)
         pendingCloudEvents.removeAll(keepingCapacity: true)
         events = []
@@ -475,19 +529,15 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         phoneSampleCount = 0
         rejectedHeadphoneCount = 0
         latestPitch = nil
+        latestOrientation = nil
+        latestBoardAcceleration = nil
+        latestBoardRotationRate = nil
+        liveStatistics = SessionStatistics()
+        sessionStartedAt = nil
+        lastStatisticsUpdate = 0
         exportedFile = nil
         lastUIUpdate = 0
         isSyntheticDemo = false
-    }
-
-    private func exportCSV() throws -> URL {
-        let stamp = Int(Date().timeIntervalSince1970)
-        let file = FileManager.default.temporaryDirectory
-            .appendingPathComponent("SkateFit-motion-\(stamp).csv")
-        let content = ([MotionSample.csvHeader] + samples.map(\.csvRow))
-            .joined(separator: "\n") + "\n"
-        try content.write(to: file, atomically: true, encoding: .utf8)
-        return file
     }
 
     /// Tests UI and classification with generated values. Never uploads demo readings.
@@ -503,6 +553,14 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
                         gravity: Vector3(x: sin(tilt), y: 0, z: -cos(tilt)))
         calibration.set(.noseContact,
                         gravity: Vector3(x: -sin(tilt), y: 0, z: -cos(tilt)))
+        do {
+            try archive.begin(id: UUID().uuidString, boardSide: boardSide.rawValue,
+                              synthetic: true)
+        } catch {
+            status = "Could not save demo session: \(error.localizedDescription)"
+            return
+        }
+        sessionStartedAt = archive.current?.startedAt
         isRecording = true
         let uptime = ProcessInfo.processInfo.systemUptime
         for index in 0..<140 {

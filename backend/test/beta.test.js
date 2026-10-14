@@ -11,7 +11,7 @@ test("iPhone installer exposes a Safari install link", () => {
 
 test("OTA manifest uses the same bundle ID and hosted IPA as the archive", () => {
   assert.match(installManifest, /com\.banddude\.skatefit\.motionlab/);
-  assert.match(installManifest, /<string>5<\/string>/);
+  assert.match(installManifest, /<string>6<\/string>/);
   assert.match(installManifest, /https:\/\/skatefit-motion-lab\.mikejshaffer\.workers\.dev\/beta\/SkateFitMotionLab\.ipa/);
 });
 
@@ -52,7 +52,7 @@ test("signed beta binary and icon stream through R2 over GET and HEAD", async ()
     assert.equal(Number(response.headers.get("content-length")), 4);
     assert.equal((await response.arrayBuffer()).byteLength, method === "GET" ? 4 : 0);
   }
-  assert.deepEqual(calls, ["ios/SkateFitMotionLab-0.1.0-5.ipa", "ios/SkateFitMotionLab-0.1.0-5.ipa"]);
+  assert.deepEqual(calls, ["ios/SkateFitMotionLab-0.1.0-6.ipa", "ios/SkateFitMotionLab-0.1.0-6.ipa"]);
 });
 
 test("iOS partial downloads honor byte ranges and reject invalid requests", async () => {
@@ -82,4 +82,22 @@ test("iOS partial downloads honor byte ranges and reject invalid requests", asyn
     headers: {"Range":"bytes=8-12"}
   }), env);
   assert.equal(rejected.status,416);
+});
+
+test("complete session stats cannot be attributed to a different session", async () => {
+  const {validateSummary} = await import("../src/worker.js");
+  const summary = {
+    id:"test-session-valid-1234",
+    startedAt:812345678.0, endedAt:812345700.0,
+    boardSide:"right",calibrated:true,isSynthetic:false,
+    csvFilename:"session-test-session-valid-1234.csv",
+    stats:{boardSamples:100,phoneSamples:230,durationSeconds:22,
+           possibleEvents:2},
+    eventKinds:{"Possible manual":2}
+  };
+  assert.equal(validateSummary(summary,summary.id),true);
+  assert.equal(validateSummary(summary,"other-session-1234"),false);
+  assert.equal(validateSummary({...summary,stats:{...summary.stats,
+    boardSamples:-1}},summary.id),false);
+  assert.equal(validateSummary({...summary,startedAt:"yesterday"},summary.id),false);
 });

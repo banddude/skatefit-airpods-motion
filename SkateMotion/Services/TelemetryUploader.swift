@@ -58,6 +58,7 @@ private struct TelemetryBatch: Codable {
     let events: [TrickEvent]
     let calibration: RemoteCalibration?
     let diagnostics: MotionDiagnostics?
+    let summary: SavedSkateSession?
 }
 
 /// Store before transmit, retry over cellular when reachable, and never delete
@@ -149,18 +150,36 @@ final class TelemetryUploader: ObservableObject {
             preferredSide: boardSide.rawValue, samples: samples,
             events: events,
             calibration: RemoteCalibration(calibration),
-            diagnostics: diagnostics
+            diagnostics: diagnostics, summary: nil
         )
+        return persist(batch)
+    }
+
+    /// Save the completed statistics in the same durable retry queue as the raw
+    /// telemetry, so cloud history will update once connectivity returns.
+    @discardableResult
+    func enqueueSummary(_ summary: SavedSkateSession) -> Bool {
+        let batch = TelemetryBatch(
+            sessionId: summary.id, batchId: UUID().uuidString,
+            device: "iPhone SkateFit Motion Lab",
+            preferredSide: summary.boardSide,
+            samples: [], events: [], calibration: nil,
+            diagnostics: nil, summary: summary
+        )
+        return persist(batch)
+    }
+
+    private func persist(_ batch: TelemetryBatch) -> Bool {
         do {
-            let file = folder.appendingPathComponent("\(id).json")
+            let file = folder.appendingPathComponent("\(batch.batchId).json")
             try encoder.encode(batch).write(to: file, options: .atomic)
             queue.append(batch)
             queuedBatchCount = queue.count
-            status = "Queued \(samples.count) readings for cellular sync."
+            status = "Queued \(batch.samples.count) readings and session data for sync."
             startSync()
             return true
         } catch {
-            status = "Couldn't persist cloud batch: \(error.localizedDescription). Local CSV remains available."
+            status = "Couldn't persist cloud packet: \(error.localizedDescription). Local CSV remains available."
             return false
         }
     }

@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   event_count INTEGER NOT NULL DEFAULT 0,
   calibration_json TEXT DEFAULT NULL,
   diagnostics_json TEXT DEFAULT NULL,
+  summary_json TEXT DEFAULT NULL,
   preferred_side TEXT DEFAULT 'left'
 );
 CREATE TABLE IF NOT EXISTS batches (

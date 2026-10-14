@@ -7,13 +7,29 @@ enum CalibrationPose: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// 3-axis board orientation. Pitch and roll are gravity-referenced, while yaw
+/// uses the AirPod's fused attitude relative to the four-wheels-flat pose.
+/// Neither is absolute heading or proof of road/ground contact.
+struct BoardOrientation: Codable, Equatable {
+    let pitchDegrees: Double
+    let rollDegrees: Double
+    let yawDegrees: Double
+    let headingAvailable: Bool
+
+    static let zero = BoardOrientation(
+        pitchDegrees: 0, rollDegrees: 0, yawDegrees: 0, headingAvailable: false)
+}
+
 /// Gravity references define board longitudinal axis despite arbitrary AirPod orientation.
 /// Only collect these poses with the AirPod rigidly attached and the board held still.
 struct BoardCalibration {
     private(set) var poses: [CalibrationPose: Vector3] = [:]
+    private(set) var flatAttitude: Quaternion4?
 
-    mutating func set(_ pose: CalibrationPose, gravity: Vector3) {
+    mutating func set(_ pose: CalibrationPose, gravity: Vector3,
+                      attitude: Quaternion4? = nil) {
         poses[pose] = gravity
+        if pose == .wheelsDown { flatAttitude = attitude }
     }
 
     var isComplete: Bool { CalibrationPose.allCases.allSatisfy { poses[$0] != nil } }
@@ -49,6 +65,37 @@ struct BoardCalibration {
         // Project onto the board's longitudinal plane. Side-to-side tilt must
         // not be mistaken for lifting the nose or tail into a manual.
         return atan2(measured.dot(length), measured.dot(flat)) * 180 / .pi
+    }
+
+    /// Valid after three-pose calibration. +pitch raises the nose;
+    /// +/-roll measures deck lateral inclination. Yaw is RELATIVE to
+    /// the level-pose attitude and can drift because AirPods lack a
+    /// magnetically anchored skateboard heading.
+    func orientation(for sample: MotionSample) -> BoardOrientation? {
+        guard isPhysicallyPlausible,
+              let pitch = pitchDegrees(gravity: sample.gravity),
+              let flat = flatGravity,
+              let width = widthAxis,
+              let measured = sample.gravity.normalized,
+              let length = lengthAxis else { return nil }
+
+        let roll = atan2(measured.dot(width), measured.dot(flat)) * 180 / .pi
+        var yaw = 0.0
+        var headingAvailable = false
+
+        if let reference = flatAttitude, let current = sample.quaternion {
+            let initialLongitudinal = reference.rotate(length)
+            let initialLateral = reference.rotate(width)
+            let currentLongitudinal = current.rotate(length)
+            let x = currentLongitudinal.dot(initialLongitudinal)
+            let y = currentLongitudinal.dot(initialLateral)
+            if hypot(x, y) > 0.08 {
+                yaw = atan2(y, x) * 180 / .pi
+                headingAvailable = true
+            }
+        }
+        return BoardOrientation(pitchDegrees: pitch, rollDegrees: roll,
+                                yawDegrees: yaw, headingAvailable: headingAvailable)
     }
 
     var contactTiltDegrees: Double? {

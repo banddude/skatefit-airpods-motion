@@ -1,3 +1,28 @@
+## Build 6: 3-axis motion and permanent skate sessions
+
+**Latest signed iPhone beta:** https://skatefit-motion-lab.mikejshaffer.workers.dev/install
+
+After the three-pose board calibration, SkateFit Motion Lab records
+**pitch, roll, and relative yaw** from AirPods gravity and fused attitude
+quaternions, with an interactive-looking (but noninteractive) native 3D
+skateboard that follows the measured orientation. All three raw gyro
+axes and all three acceleration axes are recorded alongside quaternion
+w/x/y/z values.
+
+Skating sessions now use incremental on-device CSV writing rather than
+an in-memory sample cap. On Stop, the app saves session duration, board
+and phone sample counts, acceleration and angular-velocity peaks,
+three-axis angular travel, impact spikes, manual-angle hold time, and
+possible trick detection counts to permanent local session history.
+Raw CSV and JSON summaries remain accessible in Saved Sessions after
+relaunch. Completed statistics also upload to the cloud dashboard using
+the existing offline retry queue.
+
+**Interpretation:** Yaw is relative to calibration and may drift. Angular
+travel and impulse spikes do NOT prove trick names, actual landings,
+on-board foot placement, position, or physical distance traveled. All
+trick counts are explicitly marked *possible*.
+
 # SkateFit Motion Lab
 
 **Public, experimental iPhone + AirPods Pro skateboard motion recorder and development console.**

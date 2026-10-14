@@ -13,7 +13,7 @@ The public page serves an Apple OTA installation manifest, and a Cloudflare Work
 - Two provisioning profiles are installed: `SkateFit Motion Lab App Store Login` and `SkateFit Motion Lab Ad Hoc Login`.
 - Both are registered through App Store Connect API and correspond to the app's bundle identifier.
 - The Ad Hoc profile includes the intended test iPhone. Do not commit profiles or signed IPAs to Git.
-- Cloudflare bucket `skatefit-motion-betas` holds `ios/SkateFitMotionLab-0.1.0-5.ipa` and `ios/SkateFitMotionLab-icon.png`.
+- Cloudflare bucket `skatefit-motion-betas` holds `ios/SkateFitMotionLab-0.1.0-6.ipa` and `ios/SkateFitMotionLab-icon.png`.
 - Worker exposes `/install`, `/beta/manifest.plist`, `/beta/SkateFitMotionLab.ipa`, and `/beta/icon.png`.
 
 ## Rebuilding without Apple web login
@@ -65,7 +65,7 @@ Verify the exported IPA by extracting it, checking that `codesign --verify --dee
 
 ```bash
 wrangler r2 object put \
-  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-5.ipa \
+  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-6.ipa \
   --file /tmp/skatefit-motion-beta-export/SkateMotion.ipa \
   --remote --content-type application/octet-stream
 
@@ -176,3 +176,29 @@ Once calibration has started or board samples were already accepted, an
 unexpected side change is not silently adopted. For tests with both buds
 active, confirm that the active stream belongs to the AirPod on the deck.
 No hardware or telemetry server changes are needed.
+
+
+## Beta build 6: persistent full-axis recording and statistics
+
+- Retains the fully working AirPods setup and calibrated pitch/roll plus
+  fused-attitude relative yaw. Device-motion quaternion w/x/y/z is persisted
+  in the 20-column CSV alongside three accelerometer and gyro axes.
+- New native SceneKit board illustrates pitch/roll/yaw in 3D while the
+  original side-view skateboard pitch visualization is preserved.
+- All board and phone readings are appended incrementally to local CSV,
+  avoiding the previous 180,000-sample RAM cap.
+- Local Saved Sessions lists current and past recordings with stats,
+  event categories, impact spikes, angular travel and shareable raw CSV.
+- Completed session summaries are also queued for remote D1 storage and
+  shown in the cloud dashboard. This is a summary-only packet supported by
+  a safe additive migration:
+
+  wrangler d1 execute skatefit-motion-lab --remote --file backend/migrations/0003_session_stats.sql
+
+  (Already applied to the hosted instance during build 6.)
+- Previous telemetry queue contents remain decodable since quaternion and
+  summary fields are optional.
+
+These are *sensor observations* and heuristic motion candidates; they are
+not skateboarding trick, landing, foot-contact or physical-location proof.
+Yaw is relative to flat calibration and may drift over time.

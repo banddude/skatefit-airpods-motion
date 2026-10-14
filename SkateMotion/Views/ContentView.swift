@@ -37,9 +37,17 @@ struct ContentView: View {
                     )
 
                     if store.hasCalibration {
+                        Board3DCard(orientation: store.latestOrientation,
+                                    recording: store.isRecording)
                         recordingControls
                         readyCard
                     }
+
+                    if store.isRecording || store.exportedFile != nil {
+                        SessionStatisticsCard(stats: store.liveStatistics,
+                                              recording: store.isRecording)
+                    }
+                    savedSessionsButton
 
                     if let latest = store.events.last {
                         latestEventCard(latest)
@@ -54,6 +62,32 @@ struct ContentView: View {
             .navigationTitle("SkateFit")
             .navigationBarTitleDisplayMode(.inline)
         }
+    }
+
+    private var savedSessionsButton: some View {
+        NavigationLink {
+            SavedSessionsView(store: store)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.title3)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Saved sessions")
+                        .font(.headline)
+                    Text("\(store.savedSessions.count) recordings and saved statistics")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(16)
+            .background(Color(uiColor: .secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 16))
+        }
+        .tint(.primary)
     }
 
     private var connectionBanner: some View {
@@ -289,6 +323,16 @@ struct ContentView: View {
                 }
                 .disabled(store.isRecording)
 
+                if let acceleration = store.latestBoardAcceleration {
+                    LabeledContent("Acceleration X / Y / Z (g)", value:
+                        String(format: "%.2f / %.2f / %.2f",
+                               acceleration.x, acceleration.y, acceleration.z))
+                }
+                if let rate = store.latestBoardRotationRate {
+                    LabeledContent("Gyro X / Y / Z (rad/s)", value:
+                        String(format: "%.2f / %.2f / %.2f",
+                               rate.x, rate.y, rate.z))
+                }
                 LabeledContent("AirPod readings", value: "\(store.headphoneTotalSamples)")
                 LabeledContent("Board readings", value: "\(store.boardSampleCount)")
                 LabeledContent("Phone readings", value: "\(store.phoneSampleCount)")

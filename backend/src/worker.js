@@ -18,6 +18,31 @@ function validSample(s) {
 function validCalibration(c) {
   return c && isVector(c.flat)&&isVector(c.tail)&&isVector(c.nose);
 }
+export function validateSummary(summary, sessionId) {
+  if (!summary || typeof summary!=="object" || Array.isArray(summary)
+      || summary.id!==sessionId || !validId(summary.id)
+      || !goodNumber(summary.startedAt)
+      || (summary.endedAt!=null && !goodNumber(summary.endedAt))
+      || typeof summary.boardSide!=="string"
+      || !["left","right"].includes(summary.boardSide)
+      || typeof summary.calibrated!=="boolean"
+      || typeof summary.isSynthetic!=="boolean"
+      || !summary.stats || typeof summary.stats!=="object"
+      || !Number.isSafeInteger(summary.stats.boardSamples)
+      || summary.stats.boardSamples<0
+      || !Number.isSafeInteger(summary.stats.phoneSamples)
+      || summary.stats.phoneSamples<0
+      || !goodNumber(summary.stats.durationSeconds)
+      || summary.stats.durationSeconds<0
+      || !Number.isSafeInteger(summary.stats.possibleEvents)
+      || summary.stats.possibleEvents<0
+      || typeof summary.csvFilename!=="string"
+      || summary.csvFilename.length>160
+      || !summary.eventKinds || typeof summary.eventKinds!=="object"
+      || JSON.stringify(summary).length>10000) return false;
+  return true;
+}
+
 function cors(response) {
   const h=new Headers(response.headers);
   h.set("access-control-allow-origin","*");
@@ -42,9 +67,12 @@ async function ingest(request,db) {
   if(!validId(data.batchId))return failure("Invalid batch ID.");
   const samples=data.samples;
   const events=Array.isArray(data.events)?data.events:[];
+  const summary=data.summary??null;
+  if(summary!==null && !validateSummary(summary,data.sessionId))
+    return failure("Invalid session summary.");
   if(!Array.isArray(samples)||samples.length>180||samples.some(s=>!validSample(s)))
     return failure("samples must contain up to 180 valid readings.");
-  if(samples.length===0&&events.length===0)return failure("Nothing to record.");
+  if(samples.length===0&&events.length===0&&!summary)return failure("Nothing to record.");
   if(events.length>30)return failure("Maximum 30 events per batch.");
   if(data.calibration!==undefined && !validCalibration(data.calibration))
     return failure("Invalid calibration.");
@@ -72,6 +100,7 @@ async function ingest(request,db) {
 
   const calibrationString=data.calibration?JSON.stringify(data.calibration):null;
   const diagnosticString=diagnostics?JSON.stringify(diagnostics):null;
+  const summaryString=summary?JSON.stringify(summary):null;
   const side=data.preferredSide==="right"?"right":"left";
   const device=typeof data.device==="string"?data.device.slice(0,80):"iPhone";
   const latest=samples.length?Math.max(...samples.map(s=>s.hostUptime)):0;
@@ -80,8 +109,8 @@ async function ingest(request,db) {
       .bind(data.sessionId,device,calibrationString,side),
     db.prepare("INSERT INTO batches (session_id,batch_id,sample_count,payload) VALUES (?,?,?,?)")
       .bind(data.sessionId,data.batchId,samples.length,JSON.stringify(samples)),
-    db.prepare("UPDATE sessions SET last_seen=CURRENT_TIMESTAMP, last_uptime=MAX(last_uptime,?),sample_count=sample_count+?, event_count=event_count+?, calibration_json=COALESCE(?,calibration_json),diagnostics_json=COALESCE(?,diagnostics_json),preferred_side=? WHERE id=?")
-      .bind(latest,samples.length,events.length,calibrationString,diagnosticString,side,data.sessionId)
+    db.prepare("UPDATE sessions SET last_seen=CURRENT_TIMESTAMP, last_uptime=MAX(last_uptime,?),sample_count=sample_count+?, event_count=event_count+?, calibration_json=COALESCE(?,calibration_json),diagnostics_json=COALESCE(?,diagnostics_json),summary_json=COALESCE(?,summary_json),preferred_side=? WHERE id=?")
+      .bind(latest,samples.length,events.length,calibrationString,diagnosticString,summaryString,side,data.sessionId)
   ];
   for(const e of events){
     if(typeof e.kind!=="string"||e.kind.length>100||!goodNumber(e.start)||!goodNumber(e.end))
@@ -132,7 +161,8 @@ async function csvExport(db,id){
   if(!session)return failure("No such session.",404);
   const columns=["hostUptime","deviceTimestamp","source","sensorLocation",
     "gravity.x","gravity.y","gravity.z","acceleration.x","acceleration.y","acceleration.z",
-    "rotationRate.x","rotationRate.y","rotationRate.z","pitch","roll","yaw"];
+    "rotationRate.x","rotationRate.y","rotationRate.z","pitch","roll","yaw",
+    "quaternion.w","quaternion.x","quaternion.y","quaternion.z"];
   const encoder=new TextEncoder();
   // Paginate and stream every batch instead of silently truncating sessions.
   const stream=new ReadableStream({
