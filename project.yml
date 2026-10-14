@@ -44,3 +44,14 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.banddude.skatefit.motionlab.tests
+  SkateMotionUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - SkateMotionUITests
+    dependencies:
+      - target: SkateMotion
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.banddude.skatefit.motionlab.uitests
