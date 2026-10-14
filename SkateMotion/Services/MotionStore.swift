@@ -58,6 +58,8 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     @Published private(set) var pendingCloudBatches = 0
     @Published private(set) var remoteRulesVersion = 0
     @Published private(set) var boardSampleCount = 0
+    @Published private(set) var boardHealth = BoardSensorHealthSnapshot()
+    @Published private(set) var boardStreamState = "WAITING FOR BOARD AIRPOD"
     @Published private(set) var phoneSampleCount = 0
     @Published private(set) var rejectedHeadphoneCount = 0
     @Published private(set) var headphoneStatus = "AirPods motion has not been checked."
@@ -101,7 +103,9 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     private let balanceHistory = ManualPracticeHistory()
     private static let balanceSettingsKey = "skatefitManualBalance.settingsV1"
     private var tracker = ManualBalanceTracker()
+    private var sensorQuality = BoardSensorHealth()
     private var lastBalanceUIUpdate = 0.0
+    private var lastQualityPublication = 0.0
     private let audioWake = AirPodAudioWake()
     private var subscriptions = Set<AnyCancellable>()
     private let queue: OperationQueue = {
@@ -136,10 +140,6 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
             RunnerMotionFreshness.isReady(lastSample: lastGamePitchAt,
                                           now: ProcessInfo.processInfo.systemUptime)
     }
-    /// Monotonic host receipt timestamp for the latest published board pose.
-    /// Shared only for approximate pairing with AR camera receipt times.
-    var lastBoardPoseUptime: TimeInterval? { lastGamePitchAt }
-
     var liveDashboardURL: URL { TelemetryUploader.dashboardURL }
 
     func savedCSV(for session: SavedSkateSession) -> URL {
@@ -148,15 +148,24 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     /// True only when the selected board AirPod has delivered a recent reading.
     /// Do not confuse an active Core Motion manager with actual sensor data.
     var boardSensorReady: Bool {
-        BoardSensorReadiness.canCalibrate(
-            boardReadings: boardSampleCount,
-            detectedSide: headphoneDetectedSide,
-            expectedSide: boardSide.rawValue,
-            lastReading: lastHeadphoneReadingAt,
-            now: ProcessInfo.processInfo.systemUptime
-        )
+        let health = sensorQuality.snapshot
+        let now = ProcessInfo.processInfo.systemUptime
+        return health.isFresh(now: now) &&
+            BoardSensorReadiness.canCalibrate(
+                boardReadings: health.accepted,
+                detectedSide: boardSide.rawValue,
+                expectedSide: boardSide.rawValue,
+                lastReading: health.lastBoardUptime,
+                now: now)
     }
 
+    private func publishBoardHealth(now: TimeInterval) {
+        if boardHealth != sensorQuality.snapshot {
+            boardHealth = sensorQuality.snapshot
+        }
+        let next = sensorQuality.snapshot.state(now: now)
+        if boardStreamState != next { boardStreamState = next }
+    }
 
     override init() {
         super.init()
@@ -226,11 +235,23 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         ensureHeadphoneStream()
         monitorTask?.cancel()
         monitorTask = Task { [weak self] in
+            var ticks = 0
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(for: .milliseconds(400))
                 guard let self, self.isRecording else { return }
-                self.ensureHeadphoneStream()
-                self.checkCalibrationTimeout()
+                let now = ProcessInfo.processInfo.systemUptime
+                self.publishBoardHealth(now: now)
+                if !self.sensorQuality.snapshot.isFresh(now: now) {
+                    self.tracker.interrupt()
+                    self.balance = self.tracker.snapshot
+                    self.gamePitch = nil
+                    self.latestOrientation = nil
+                }
+                ticks += 1
+                if ticks.isMultiple(of: 5) {
+                    self.ensureHeadphoneStream()
+                    self.checkCalibrationTimeout()
+                }
             }
         }
         status = headphone.isDeviceMotionAvailable
@@ -426,6 +447,13 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     nonisolated func headphoneMotionManagerDidDisconnect(_ manager: CMHeadphoneMotionManager) {
         Task { @MainActor [weak self] in
             self?.headphoneStreamActive = false
+            self?.tracker.interrupt()
+            if let self {
+                self.balance = self.tracker.snapshot
+                self.gamePitch = nil
+                self.latestOrientation = nil
+                self.publishBoardHealth(now: ProcessInfo.processInfo.systemUptime)
+            }
             self?.headphoneStatus = "AirPods disconnected. Check Automatic Ear Detection and Bluetooth audio connection."
         }
     }
@@ -509,6 +537,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
             }
         }
         if sample.source == .headphone && sample.sensorLocation != boardSide.rawValue {
+            _ = sensorQuality.accept(sample, expectedSide: boardSide.rawValue)
             rejectedHeadphoneCount += 1
             saveSample(sample, isBoard: false, orientation: nil)
             if sample.hostUptime - lastUIUpdate > 0.5 {
@@ -516,6 +545,20 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
                 lastUIUpdate = sample.hostUptime
             }
             return
+        }
+        // Source, magnitude and timestamp gating occurs before classification,
+        // calibration and scoring. Invalid frames never count as practice.
+        guard sensorQuality.accept(
+            sample, expectedSide: boardSide.rawValue,
+            allowSimulation: isSyntheticDemo) else {
+            tracker.interrupt()
+            balance = tracker.snapshot
+            publishBoardHealth(now: sample.hostUptime)
+            return
+        }
+        if sample.hostUptime - lastQualityPublication > 0.20 {
+            publishBoardHealth(now: sample.hostUptime)
+            lastQualityPublication = sample.hostUptime
         }
         boardSampleCount += 1
         let motionOrientation = calibration.orientation(for: sample)
@@ -623,6 +666,10 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         events = []
         detector.reset()
         boardSampleCount = 0
+        sensorQuality.reset()
+        boardHealth = sensorQuality.snapshot
+        boardStreamState = "WAITING FOR BOARD AIRPOD"
+        lastQualityPublication = 0
         headphoneTotalSamples = 0
         lastHeadphoneReadingAt = nil
         headphoneDetectedSide = "none"

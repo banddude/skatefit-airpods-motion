@@ -22,17 +22,19 @@ struct ManualBalanceCoachView: View {
             VStack(alignment: .leading, spacing: 17) {
                 header
                 sessionControls
+                if store.isRecording { sensorQualityCard }
                 if store.hasCalibration && store.isRecording && store.boardSensorReady {
                     liveCoach
                 } else {
                     setupInstructions
                 }
+                nextTrainingGoals
                 trainingGoals
-                opticalBoardSpaceEntry
+                lastAttemptCard
                 rawSensorDetails
                 locationPanel
                 recentPractice
-                Text("Orientation-only training. SkateFit cannot see your feet, axle contact, deck height, location in 3D, or whether a manual was landed. Keep a reference video for technique review.")
+                Text("SENSORS ONLY. AirPod gravity, gyro, acceleration and attitude determine board pose. Optional iPhone GPS only gives travel speed. No camera, no verified wheel contact, no absolute board XYZ, and no claim that a real manual was landed.")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.65))
                     .padding(.bottom, 18)
@@ -55,7 +57,7 @@ struct ManualBalanceCoachView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("SKATEFIT TRAINING", systemImage: "figure.skating")
+            Label("AIRPOD SENSORS · MANUAL PRACTICE", systemImage: "airpodspro")
                 .font(.caption.weight(.black))
                 .tracking(2)
                 .foregroundStyle(accent)
@@ -63,7 +65,7 @@ struct ManualBalanceCoachView: View {
                 .font(.system(size: 31, weight: .black, design: .rounded))
                 .minimumScaleFactor(0.7)
                 .lineLimit(1)
-            Text("Raise the nose or tail, hold a steady angle, and beat your personal best. Work on control before adding speed.")
+            Text("Train manuals and nose manuals with an AirPod mounted to your deck. See what ended each hold, correct your balance, and build consistency.")
                 .font(.subheadline)
                 .foregroundStyle(.white.opacity(0.73))
         }
@@ -116,6 +118,124 @@ struct ManualBalanceCoachView: View {
         }
         .padding(18)
         .background(panel, in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    private var sensorQualityCard: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 9) {
+                Image(systemName: store.boardSensorReady
+                      ? "checkmark.shield.fill" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(store.boardSensorReady ? accent : .orange)
+                Text("SENSOR QUALITY")
+                    .font(.caption.weight(.black))
+                    .tracking(1.3)
+                Spacer()
+                Text(store.boardStreamState)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(store.boardSensorReady ? accent : .orange)
+                    .multilineTextAlignment(.trailing)
+            }
+            HStack(spacing: 9) {
+                metric("SAMPLES", "\(store.boardHealth.accepted)", "waveform.path")
+                metric("RATE",
+                       String(format: "%.0f Hz", store.boardHealth.sampleRateHz),
+                       "speedometer")
+                metric("GAPS", "\(store.boardHealth.interruptions)", "wifi.exclamationmark")
+            }
+            if store.boardHealth.rejected > 0 {
+                Text("\(store.boardHealth.rejected) rejected frames. Latest: \(store.boardHealth.latestRejection ?? "unknown")")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
+            Text("Only data from the selected board AirPod counts. Invalid, duplicate and disconnected samples never improve a training score.")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.64))
+        }
+        .padding(14)
+        .background(panel, in: RoundedRectangle(cornerRadius: 18))
+        .accessibilityIdentifier("airpodSensorHealth")
+    }
+
+    private var nextTrainingGoals: some View {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack {
+                Image(systemName: "target")
+                    .foregroundStyle(accent)
+                Text("YOUR NEXT MILESTONES")
+                    .font(.subheadline.weight(.black))
+            }
+            HStack(spacing: 10) {
+                nextGoalButton(for: .manual)
+                nextGoalButton(for: .noseManual)
+            }
+            Text("Milestones use your saved personal bests. They measure board orientation holds, not confirmed wheel contact.")
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.65))
+        }
+        .padding(15)
+        .background(panel, in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    private func nextGoalButton(for side: ManualSide) -> some View {
+        let best = ManualPracticeInsights.personalBest(
+            for: side, sessions: store.savedManualPractices)
+        let next = ManualPracticeInsights.recommendedGoal(
+            for: side, sessions: store.savedManualPractices)
+        return Button {
+            store.balanceSettings.goalSeconds = next
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(side == .manual ? "MANUAL" : "NOSE MANUAL")
+                    .font(.caption2.weight(.black))
+                    .foregroundStyle(.white.opacity(0.75))
+                Text(String(format: "%.0f SEC", next))
+                    .font(.system(size: 22, weight: .black, design: .rounded))
+                    .foregroundStyle(accent)
+                Text(String(format: "Best %.1fs · Set goal", best))
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.65))
+                    .minimumScaleFactor(0.8)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(dark, in: RoundedRectangle(cornerRadius: 13))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(side == .manual ? "nextManualGoal" : "nextNoseGoal")
+    }
+
+    @ViewBuilder private var lastAttemptCard: some View {
+        if let last = practice.lastCompletedHold {
+            VStack(alignment: .leading, spacing: 11) {
+                HStack {
+                    Text("LAST QUALIFIED HOLD")
+                        .font(.subheadline.weight(.black))
+                    Spacer()
+                    Text(last.reachedGoal ? "GOAL REACHED" : "KEEP PRACTICING")
+                        .font(.caption2.weight(.black))
+                        .foregroundStyle(last.reachedGoal ? accent : .yellow)
+                }
+                HStack(spacing: 9) {
+                    metric(last.side.rawValue.uppercased(),
+                           String(format: "%.2fs", last.seconds),
+                           "timer")
+                    metric("ANGLE", String(format: "%.1f°", last.averageAngleDegrees),
+                           "angle")
+                    metric("WOBBLE", String(format: "%.1f°", last.wobbleRMSDegrees),
+                           "waveform.path")
+                }
+                Label("Ended: \(last.endedBy.rawValue)", systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.75))
+                Text("Stability \(Int(last.averageStability))% · Mean sideways tilt " +
+                     String(format: "%.1f°", last.averageSideTiltDegrees))
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.65))
+            }
+            .padding(15)
+            .background(panel, in: RoundedRectangle(cornerRadius: 18))
+        }
     }
 
     private var liveCoach: some View {
@@ -236,7 +356,7 @@ struct ManualBalanceCoachView: View {
             Slider(value: Binding(
                 get: { store.balanceSettings.goalSeconds },
                 set: { store.balanceSettings.goalSeconds = $0 }),
-                in: 1...20, step: 1).tint(accent)
+                in: 1...60, step: 1).tint(accent)
 
             HStack(spacing: 9) {
                 metric("BEST MANUAL",
@@ -257,39 +377,6 @@ struct ManualBalanceCoachView: View {
         }
         .padding(17)
         .background(panel, in: RoundedRectangle(cornerRadius: 18))
-    }
-
-    private var opticalBoardSpaceEntry: some View {
-        NavigationLink {
-            BoardSpaceLabView(store: store)
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "viewfinder")
-                    .font(.system(size: 30, weight: .bold))
-                    .foregroundStyle(accent)
-                    .frame(width: 55, height: 56)
-                    .background(dark, in: RoundedRectangle(cornerRadius: 12))
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("NEW · EXPERIMENTAL SPATIAL TRACKING")
-                        .font(.system(size: 9, weight: .black))
-                        .foregroundStyle(accent)
-                        .tracking(0.8)
-                    Text("Board Space Camera Lab")
-                        .font(.subheadline.weight(.black))
-                    Text("Optical X/Y/Z marker movement, printed target, and AirPod timing")
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.69))
-                        .multilineTextAlignment(.leading)
-                }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .foregroundStyle(accent)
-            }
-            .padding(13)
-            .background(panel, in: RoundedRectangle(cornerRadius: 17))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("openBoardSpaceLab")
     }
 
     private var rawSensorDetails: some View {
@@ -401,6 +488,12 @@ struct ManualBalanceCoachView: View {
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.7))
             }
+            if let delta = ManualPracticeInsights.improvement(
+                for: .manual, sessions: store.savedManualPractices) {
+                Text(String(format: "Latest manual best vs previous session: %+.1f seconds", delta))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(delta >= 0 ? accent : .orange)
+            }
             ForEach(Array(store.savedManualPractices.prefix(6))) { session in
                 HStack(spacing: 10) {
                     Image(systemName: "clock.arrow.circlepath").foregroundStyle(accent)
@@ -411,9 +504,23 @@ struct ManualBalanceCoachView: View {
                             .font(.caption2).foregroundStyle(.white.opacity(0.6))
                     }
                     Spacer()
-                    Text(String(format: "%.1f / %.1fs",
-                                session.bestManualSeconds, session.bestNoseSeconds))
-                        .font(.caption.monospacedDigit().bold())
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text(String(format: "%.1f / %.1fs",
+                                    session.bestManualSeconds, session.bestNoseSeconds))
+                            .font(.caption.monospacedDigit().bold())
+                        if let attempts = session.attempts {
+                            Text("\(attempts.count) detailed holds")
+                                .font(.caption2)
+                                .foregroundStyle(accent)
+                        }
+                    }
+                }
+                if let last = session.qualifiedHolds.last {
+                    Text(String(format: "Last hold: %.1fs · %.1f° wobble · %@",
+                                last.seconds, last.wobbleRMSDegrees,
+                                last.endedBy.rawValue))
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.62))
                 }
                 Divider().overlay(.white.opacity(0.12))
             }
