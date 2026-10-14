@@ -371,7 +371,7 @@ struct ManualRunnerGame: View {
             }
         }
         .panel()
-        .accessibilityIdentifier("gameInputStatus")
+        .accessibilityElement(children: .contain)
     }
 
     private var worldList: some View {
