@@ -78,6 +78,7 @@ final class BoardOpticalMathTests: XCTestCase {
         XCTAssertNotNil(pdf, "Printable 120 mm PDF must travel with the signed IPA")
     }
 
+    @MainActor
     func testOpticalLoggerWritesOnlyExplicitlyRecordedLocalData() throws {
         let recorder = BoardOpticalSessionRecorder()
         XCTAssertFalse(recorder.isRecording)
