@@ -3,10 +3,22 @@ import CoreMotion
 import Foundation
 import SwiftUI
 
+/// Calibration must never silently fall back to phone data. Keeping this
+/// check pure allows tests without pairing physical AirPods in the simulator.
+enum BoardSensorReadiness {
+    static func canCalibrate(boardReadings: Int, detectedSide: String,
+                             expectedSide: String, lastReading: TimeInterval?,
+                             now: TimeInterval) -> Bool {
+        guard boardReadings > 0, detectedSide == expectedSide,
+              let lastReading else { return false }
+        return now >= lastReading && now - lastReading < 4
+    }
+}
+
 /// Main-actor state owned by the UI. Core Motion delivers on a private operation queue.
 /// Raw samples are also sent to the independent cloud collector over cellular.
 @MainActor
-final class MotionStore: ObservableObject {
+final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDelegate {
     @Published private(set) var isRecording = false
     @Published var boardSide: HeadphoneSide = .left
     @Published var cloudSyncEnabled = true
@@ -18,6 +30,12 @@ final class MotionStore: ObservableObject {
     @Published private(set) var boardSampleCount = 0
     @Published private(set) var phoneSampleCount = 0
     @Published private(set) var rejectedHeadphoneCount = 0
+    @Published private(set) var headphoneStatus = "AirPods motion has not been checked."
+    @Published private(set) var headphonePermission = "Unknown"
+    @Published private(set) var headphoneStreamActive = false
+    @Published private(set) var headphoneDetectedSide = "none"
+    @Published private(set) var headphoneTotalSamples = 0
+    @Published private(set) var calibrationProgress: Double = 0
     @Published private(set) var latestPitch: Double?
     @Published private(set) var calibration = BoardCalibration()
     @Published private(set) var calibrationPose: CalibrationPose?
@@ -41,6 +59,10 @@ final class MotionStore: ObservableObject {
     private var detector = TrickDetector()
     private var calibrationGravities: [Vector3] = []
     private var calibrationStart: TimeInterval?
+    private var calibrationRequestedAt: TimeInterval?
+    private var lastHeadphoneReadingAt: TimeInterval?
+    private var monitorTask: Task<Void, Never>?
+    private var lastHeadphoneStreamStart: TimeInterval?
     private var lastUIUpdate = 0.0
     private var isSyntheticDemo = false
     private let maxSamples = 180_000
@@ -50,7 +72,10 @@ final class MotionStore: ObservableObject {
     var phoneAvailable: Bool { phone.isDeviceMotionAvailable }
     var liveDashboardURL: URL { TelemetryUploader.dashboardURL }
 
-    init() {
+    override init() {
+        super.init()
+        headphone.delegate = self
+        updateHeadphonePermission()
         cloud.$status.sink { [weak self] in self?.cloudStatus = $0 }
             .store(in: &subscriptions)
         cloud.$queuedBatchCount.sink { [weak self] in self?.pendingCloudBatches = $0 }
@@ -86,35 +111,35 @@ final class MotionStore: ObservableObject {
                 }
             }
         }
-        if headphone.isDeviceMotionAvailable {
-            headphone.startDeviceMotionUpdates(to: queue) { [weak self] motion, error in
-                let uptime = ProcessInfo.processInfo.systemUptime
-                Task { @MainActor [weak self] in
-                    guard let self, let motion else {
-                        if let error { self?.status = "AirPods motion: \(error.localizedDescription)" }
-                        return
-                    }
-                    self.receive(MotionSample(motion: motion, source: .headphone, receivedAt: uptime))
-                }
+        headphone.startConnectionStatusUpdates()
+        ensureHeadphoneStream()
+        monitorTask?.cancel()
+        monitorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard let self, self.isRecording else { return }
+                self.ensureHeadphoneStream()
+                self.checkCalibrationTimeout()
             }
         }
-        if headphone.isDeviceMotionAvailable {
-            status = "Recording iPhone and AirPods. Board AirPod: \(boardSide.title)."
-        } else {
-            status = phone.isDeviceMotionAvailable
-                ? "Recording phone only. AirPods motion unavailable; pair compatible AirPods and restart."
-                : "No motion sensors available. Use a physical iPhone, not the simulator."
-        }
+        status = headphone.isDeviceMotionAvailable
+            ? "Recording. Waiting for AirPod sensor readings; board side: \(boardSide.title)."
+            : "Phone is recording, but AirPods motion is unavailable. Open Bluetooth settings and turn Automatic Ear Detection off."
     }
 
     func stopRecording() {
         guard isRecording else { return }
+        monitorTask?.cancel()
+        monitorTask = nil
         headphone.stopDeviceMotionUpdates()
+        headphone.stopConnectionStatusUpdates()
         phone.stopDeviceMotionUpdates()
         isRecording = false
         UIApplication.shared.isIdleTimerDisabled = false
         calibrationPose = nil
         calibrationStart = nil
+        calibrationRequestedAt = nil
+        calibrationProgress = 0
         calibrationGravities.removeAll()
         stagePendingTelemetry()
         isSyntheticDemo = false
@@ -131,10 +156,110 @@ final class MotionStore: ObservableObject {
             status = "Start recording before calibrating."
             return
         }
+        guard BoardSensorReadiness.canCalibrate(
+            boardReadings: boardSampleCount,
+            detectedSide: headphoneDetectedSide,
+            expectedSide: boardSide.rawValue,
+            lastReading: lastHeadphoneReadingAt,
+            now: ProcessInfo.processInfo.systemUptime) else {
+            if headphoneTotalSamples > 0 && headphoneDetectedSide != boardSide.rawValue {
+                status = "AirPod \(headphoneDetectedSide) is streaming, but \(boardSide.rawValue) is selected. Stop recording and select the AirPod attached to the board."
+            } else {
+                status = "Cannot calibrate: no recent board AirPod samples. Only phone motion is uploading. Check AirPods Bluetooth connection and Automatic Ear Detection, then tap Retry AirPods."
+            }
+            ensureHeadphoneStream()
+            return
+        }
         calibrationPose = pose
         calibrationStart = nil
+        calibrationRequestedAt = ProcessInfo.processInfo.systemUptime
+        calibrationProgress = 0
         calibrationGravities = []
         status = "Hold \(pose.rawValue.lowercased()) steady for about 1.5 seconds."
+    }
+
+    func retryHeadphones() {
+        updateHeadphonePermission()
+        headphone.stopDeviceMotionUpdates()
+        headphoneStreamActive = false
+        lastHeadphoneStreamStart = nil
+        headphone.startConnectionStatusUpdates()
+        ensureHeadphoneStream()
+        status = "Retrying AirPods motion. Open the AirPods Bluetooth settings if the sensor stays unavailable."
+    }
+
+    private func updateHeadphonePermission() {
+        switch CMHeadphoneMotionManager.authorizationStatus() {
+        case .authorized: headphonePermission = "Authorized"
+        case .denied: headphonePermission = "Denied. Enable Motion & Fitness access in Settings."
+        case .restricted: headphonePermission = "Restricted"
+        case .notDetermined: headphonePermission = "Not yet requested"
+        @unknown default: headphonePermission = "Unknown authorization"
+        }
+    }
+
+    private func ensureHeadphoneStream() {
+        guard isRecording, !isSyntheticDemo else { return }
+        updateHeadphonePermission()
+        let now = ProcessInfo.processInfo.systemUptime
+        if !headphone.isDeviceMotionAvailable {
+            headphoneStreamActive = false
+            headphoneStatus = "AirPods motion unavailable. Your phone can upload data, but calibration needs the board AirPod."
+            return
+        }
+        let stale = lastHeadphoneReadingAt.map { now - $0 > 8 }
+            ?? (lastHeadphoneStreamStart.map { now - $0 > 8 } ?? false)
+        if headphone.isDeviceMotionActive && !stale {
+            headphoneStreamActive = true
+            if lastHeadphoneReadingAt == nil {
+                headphoneStatus = "AirPods motion stream active; waiting for first reading."
+            }
+            return
+        }
+        if headphone.isDeviceMotionActive { headphone.stopDeviceMotionUpdates() }
+        lastHeadphoneStreamStart = now
+        headphoneStreamActive = false
+        headphoneStatus = "Connecting to AirPods motion stream..."
+        headphone.startDeviceMotionUpdates(to: queue) { [weak self] motion, error in
+            let uptime = ProcessInfo.processInfo.systemUptime
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if let error {
+                    self.headphoneStatus = "AirPods sensor error: \(error.localizedDescription)"
+                    self.updateHeadphonePermission()
+                    return
+                }
+                guard let motion else { return }
+                self.receive(MotionSample(motion: motion, source: .headphone, receivedAt: uptime))
+            }
+        }
+    }
+
+    private func checkCalibrationTimeout() {
+        guard calibrationPose != nil, let requested = calibrationRequestedAt else { return }
+        if ProcessInfo.processInfo.systemUptime - requested > 6,
+           (calibrationStart == nil || calibrationProgress < 1) {
+            calibrationPose = nil
+            calibrationStart = nil
+            calibrationRequestedAt = nil
+            calibrationGravities = []
+            calibrationProgress = 0
+            status = "Calibration timed out: no continuous board AirPod motion. Check the AirPod source and tap Retry AirPods."
+        }
+    }
+
+    nonisolated func headphoneMotionManagerDidConnect(_ manager: CMHeadphoneMotionManager) {
+        Task { @MainActor [weak self] in
+            self?.headphoneStatus = "Headphones connected; checking motion..."
+            self?.ensureHeadphoneStream()
+        }
+    }
+
+    nonisolated func headphoneMotionManagerDidDisconnect(_ manager: CMHeadphoneMotionManager) {
+        Task { @MainActor [weak self] in
+            self?.headphoneStreamActive = false
+            self?.headphoneStatus = "AirPods disconnected. Check Automatic Ear Detection and Bluetooth audio connection."
+        }
     }
 
     func forceCloudSync() {
@@ -155,9 +280,19 @@ final class MotionStore: ObservableObject {
             let eventCount = min(25, pendingCloudEvents.count)
             let chunk = Array(pendingCloudSamples.prefix(sampleCount))
             let taggedEvents = Array(pendingCloudEvents.prefix(eventCount))
+            let diagnostic = MotionDiagnostics(
+                headphoneAvailable: headphone.isDeviceMotionAvailable,
+                headphoneActive: headphone.isDeviceMotionActive,
+                permission: headphonePermission,
+                detectedSide: headphoneDetectedSide,
+                boardReadings: boardSampleCount,
+                headphoneReadings: headphoneTotalSamples,
+                phoneReadings: phoneSampleCount,
+                message: headphoneStatus
+            )
             let saved = cloud.enqueue(sessionId: sessionId, boardSide: boardSide,
                                       samples: chunk, events: taggedEvents,
-                                      calibration: calibration)
+                                      calibration: calibration, diagnostics: diagnostic)
             if !saved { return }
             pendingCloudSamples.removeFirst(sampleCount)
             pendingCloudEvents.removeFirst(eventCount)
@@ -181,8 +316,17 @@ final class MotionStore: ObservableObject {
             phoneSampleCount += 1
             return
         }
-        // The currently streaming AirPod could be the ear-worn one.
-        // Record all sources for diagnostics, but do not classify the wrong one.
+        // Record all sources for diagnostics, but never classify the ear-worn
+        // or incorrectly selected AirPod as movement from the skateboard.
+        if sample.source == .headphone {
+            headphoneTotalSamples += 1
+            lastHeadphoneReadingAt = sample.hostUptime
+            headphoneDetectedSide = sample.sensorLocation
+            headphoneStreamActive = true
+            if headphoneTotalSamples == 1 || headphoneTotalSamples % 10 == 0 {
+                headphoneStatus = "Receiving AirPod \(sample.sensorLocation) motion. \(headphoneTotalSamples) readings."
+            }
+        }
         if sample.source == .headphone && sample.sensorLocation != boardSide.rawValue {
             rejectedHeadphoneCount += 1
             if sample.hostUptime - lastUIUpdate > 0.5 {
@@ -196,12 +340,17 @@ final class MotionStore: ObservableObject {
         if let pose = calibrationPose {
             if calibrationStart == nil { calibrationStart = sample.hostUptime }
             calibrationGravities.append(sample.gravity)
+            if let start = calibrationStart {
+                calibrationProgress = min(1, max(0, (sample.hostUptime - start) / 1.5))
+            }
             if let start = calibrationStart, sample.hostUptime - start >= 1.5 {
                 let total = calibrationGravities.reduce(Vector3.zero, +)
                 let mean = total * (1.0 / Double(calibrationGravities.count))
                 calibration.set(pose, gravity: mean)
                 calibrationPose = nil
                 calibrationStart = nil
+                calibrationRequestedAt = nil
+                calibrationProgress = 0
                 calibrationGravities = []
                 detector.reset()
                 status = calibration.isComplete && !calibration.isPhysicallyPlausible
@@ -227,6 +376,11 @@ final class MotionStore: ObservableObject {
         events = []
         detector.reset()
         boardSampleCount = 0
+        headphoneTotalSamples = 0
+        lastHeadphoneReadingAt = nil
+        headphoneDetectedSide = "none"
+        calibrationRequestedAt = nil
+        calibrationProgress = 0
         phoneSampleCount = 0
         rejectedHeadphoneCount = 0
         latestPitch = nil

@@ -48,10 +48,26 @@ async function ingest(request,db) {
   if(events.length>30)return failure("Maximum 30 events per batch.");
   if(data.calibration!==undefined && !validCalibration(data.calibration))
     return failure("Invalid calibration.");
+  const diagnostics=data.diagnostics;
+  if(diagnostics!==undefined && diagnostics!==null){
+    if(!diagnostics || typeof diagnostics!=="object" || Array.isArray(diagnostics)
+      || typeof diagnostics.headphoneAvailable!=="boolean"
+      || typeof diagnostics.headphoneActive!=="boolean"
+      || !["Authorized","Not yet requested","Restricted","Unknown authorization",
+            "Denied. Enable Motion & Fitness access in Settings."].includes(diagnostics.permission)
+      || typeof diagnostics.detectedSide!=="string"
+      || !["none","left","right","default"].includes(diagnostics.detectedSide)
+      || !["boardReadings","headphoneReadings","phoneReadings"].every(
+         key=>Number.isSafeInteger(diagnostics[key]) && diagnostics[key]>=0)
+      || typeof diagnostics.message!=="string"
+      || diagnostics.message.length>500)
+      return failure("Invalid sensor diagnostics.");
+  }
   const existing=await db.prepare("SELECT id FROM batches WHERE batch_id=?").bind(data.batchId).first();
   if(existing)return json({ok:true,duplicate:true,accepted:0});
 
   const calibrationString=data.calibration?JSON.stringify(data.calibration):null;
+  const diagnosticString=diagnostics?JSON.stringify(diagnostics):null;
   const side=data.preferredSide==="right"?"right":"left";
   const device=typeof data.device==="string"?data.device.slice(0,80):"iPhone";
   const latest=samples.length?Math.max(...samples.map(s=>s.hostUptime)):0;
@@ -60,8 +76,8 @@ async function ingest(request,db) {
       .bind(data.sessionId,device,calibrationString,side),
     db.prepare("INSERT INTO batches (session_id,batch_id,sample_count,payload) VALUES (?,?,?,?)")
       .bind(data.sessionId,data.batchId,samples.length,JSON.stringify(samples)),
-    db.prepare("UPDATE sessions SET last_seen=CURRENT_TIMESTAMP, last_uptime=MAX(last_uptime,?),sample_count=sample_count+?, event_count=event_count+?, calibration_json=COALESCE(?,calibration_json),preferred_side=? WHERE id=?")
-      .bind(latest,samples.length,events.length,calibrationString,side,data.sessionId)
+    db.prepare("UPDATE sessions SET last_seen=CURRENT_TIMESTAMP, last_uptime=MAX(last_uptime,?),sample_count=sample_count+?, event_count=event_count+?, calibration_json=COALESCE(?,calibration_json),diagnostics_json=COALESCE(?,diagnostics_json),preferred_side=? WHERE id=?")
+      .bind(latest,samples.length,events.length,calibrationString,diagnosticString,side,data.sessionId)
   ];
   for(const e of events){
     if(typeof e.kind!=="string"||e.kind.length>100||!goodNumber(e.start)||!goodNumber(e.end))

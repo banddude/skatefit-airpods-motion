@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   sample_count INTEGER NOT NULL DEFAULT 0,
   event_count INTEGER NOT NULL DEFAULT 0,
   calibration_json TEXT DEFAULT NULL,
+  diagnostics_json TEXT DEFAULT NULL,
   preferred_side TEXT DEFAULT 'left'
 );
 CREATE TABLE IF NOT EXISTS batches (

@@ -34,6 +34,19 @@ struct RemoteCalibration: Codable {
     }
 }
 
+/// Lightweight diagnostic snapshot, sent with every raw-sensor batch so the
+/// dashboard can distinguish an AirPods connection problem from an algorithm bug.
+struct MotionDiagnostics: Codable {
+    let headphoneAvailable: Bool
+    let headphoneActive: Bool
+    let permission: String
+    let detectedSide: String
+    let boardReadings: Int
+    let headphoneReadings: Int
+    let phoneReadings: Int
+    let message: String
+}
+
 private struct TelemetryBatch: Codable {
     let sessionId: String
     let batchId: String
@@ -42,6 +55,7 @@ private struct TelemetryBatch: Codable {
     let samples: [MotionSample]
     let events: [TrickEvent]
     let calibration: RemoteCalibration?
+    let diagnostics: MotionDiagnostics?
 }
 
 /// Store before transmit, retry over cellular when reachable, and never delete
@@ -121,7 +135,8 @@ final class TelemetryUploader: ObservableObject {
                  boardSide: HeadphoneSide,
                  samples: [MotionSample],
                  events: [TrickEvent],
-                 calibration: BoardCalibration) -> Bool {
+                 calibration: BoardCalibration,
+                 diagnostics: MotionDiagnostics) -> Bool {
         guard !samples.isEmpty || !events.isEmpty else { return true }
         // Keep each request comfortably under the server's 240 KB JSON limit.
         // Event-only chunks are handled separately in the caller.
@@ -131,7 +146,8 @@ final class TelemetryUploader: ObservableObject {
             device: "iPhone SkateFit Motion Lab",
             preferredSide: boardSide.rawValue, samples: samples,
             events: events,
-            calibration: RemoteCalibration(calibration)
+            calibration: RemoteCalibration(calibration),
+            diagnostics: diagnostics
         )
         do {
             let file = folder.appendingPathComponent("\(id).json")

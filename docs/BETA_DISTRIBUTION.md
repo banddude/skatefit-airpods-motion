@@ -13,7 +13,7 @@ The public page serves an Apple OTA installation manifest, and a Cloudflare Work
 - Two provisioning profiles are installed: `SkateFit Motion Lab App Store Login` and `SkateFit Motion Lab Ad Hoc Login`.
 - Both are registered through App Store Connect API and correspond to the app's bundle identifier.
 - The Ad Hoc profile includes the intended test iPhone. Do not commit profiles or signed IPAs to Git.
-- Cloudflare bucket `skatefit-motion-betas` holds `ios/SkateFitMotionLab-0.1.0-1.ipa` and `ios/SkateFitMotionLab-icon.png`.
+- Cloudflare bucket `skatefit-motion-betas` holds `ios/SkateFitMotionLab-0.1.0-2.ipa` and `ios/SkateFitMotionLab-icon.png`.
 - Worker exposes `/install`, `/beta/manifest.plist`, `/beta/SkateFitMotionLab.ipa`, and `/beta/icon.png`.
 
 ## Rebuilding without Apple web login
@@ -65,14 +65,14 @@ Verify the exported IPA by extracting it, checking that `codesign --verify --dee
 
 ```bash
 wrangler r2 object put \
-  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-1.ipa \
+  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-2.ipa \
   --file /tmp/skatefit-motion-beta-export/SkateMotion.ipa \
   --remote --content-type application/octet-stream
 
 wrangler deploy
 ```
 
-The command above illustrates the **existing build 1** path. For future builds, change the object path to match the incremented version/build.
+The command above illustrates the **new build 2** path. For future builds, change the object path to match the incremented version/build.
 
 ## TestFlight transition
 
@@ -95,3 +95,18 @@ No production SkateFit app or App Store listing should be modified as part of th
 On the target iPhone in Safari, open the install page and tap the install link. Verify that the **SkateFit Motion Lab** icon appears separately from SkateFit. Pair first-generation AirPods Pro, disable automatic ear detection if needed, record stationary movement and the three calibration poses, then perform gentle rolling/manual tests. Check the public cloud dashboard for received board and phone samples. A successful server smoke test with synthetic data is **not** evidence that real off-ear AirPods will track accurately.
 
 This beta has intentionally unauthenticated telemetry and public read access; consult [the privacy notice](../PRIVACY.md) before uploading personal recordings.
+
+
+## Beta build 2: headphone connection recovery
+
+A live session had over 12,000 phone readings and no AirPod readings. This prevented the first calibration pose from completing. Build 2 now:
+
+- Displays AirPods motion availability, permission, streaming status, detected earbud and sensor sample counts.
+- Retries the motion stream automatically if AirPods connect after recording starts.
+- Won't start calibration without recent motion from the selected AirPod.
+- Times out a stalled calibration and shows progress if AirPod readings arrive.
+- Uploads per-session sensor diagnostics to the cloud dashboard.
+
+If using the AirPod outside your ear, disable Automatic Ear Detection and verify Bluetooth reports it **Connected**. Pairing alone is not proof that iOS is delivering headphone motion.
+
+Production D1 migration: \`wrangler d1 execute skatefit-motion-lab --remote --file backend/migrations/0002_sensor_diagnostics.sql\`, applied once.

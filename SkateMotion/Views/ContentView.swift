@@ -26,6 +26,21 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                Section("AirPods motion connection") {
+                    Text(store.headphoneStatus)
+                        .font(.subheadline)
+                        .foregroundStyle(store.headphoneTotalSamples == 0 ? .orange : .green)
+                    LabeledContent("Headphone sensor available", value: store.headphoneAvailable ? "Yes" : "No")
+                    LabeledContent("Motion permission", value: store.headphonePermission)
+                    LabeledContent("Stream active", value: store.headphoneStreamActive ? "Yes" : "No")
+                    LabeledContent("Detected AirPod", value: store.headphoneDetectedSide.capitalized)
+                    LabeledContent("AirPod sensor readings", value: "\(store.headphoneTotalSamples)")
+                    Button("Retry AirPods connection") { store.retryHeadphones() }
+                    Text("If only phone readings appear, open Settings → Bluetooth → your AirPods Pro. Verify Connected, turn Automatic Ear Detection OFF, and return here. You can temporarily wear one AirPod to confirm its motion sensors are working.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("Live cloud development console") {
                     Toggle("Send motion data over cellular", isOn: $store.cloudSyncEnabled)
                     Text(store.cloudStatus)
@@ -67,6 +82,14 @@ struct ContentView: View {
                             }
                         }
                         .disabled(!store.isRecording || store.calibrationPose != nil)
+                    }
+                    if store.calibrationPose != nil {
+                        ProgressView("Capturing board AirPod motion", value: store.calibrationProgress)
+                    }
+                    if store.isRecording && store.boardSampleCount == 0 {
+                        Text("Calibration needs real AirPod samples. Phone-only uploads cannot complete it.")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
                     }
                     Text(store.hasCalibration
                          ? "Calibration accepted. Detection is enabled."

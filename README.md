@@ -59,6 +59,14 @@ xcodebuild -project SkateMotion.xcodeproj -scheme SkateMotion \
 
 To install on a physical iPhone, choose the connected iPhone and an Apple development **Team** in Xcode's Signing & Capabilities, enable automatic signing, and Run. This repo isn't yet distributed via TestFlight. No credentials are committed.
 
+## AirPods troubleshooting (beta build 2)
+
+If the first **four wheels down** calibration step keeps collecting without finishing, confirm the app is actually receiving **AirPods motion**, not merely iPhone motion. The first real test session showed over **12,000 iPhone readings and zero AirPod readings**, so it could not calibrate. This is not evidence the board position was incorrect.
+
+Build **0.1.0 (2)** displays headphone motion availability, authorization, active stream, selected/detected side and reading counts. It retries when headphones connect later, times out stale calibration, and sends those health indicators to the live cloud dashboard. Use **Retry AirPods connection** while recording after connecting AirPods under Settings → Bluetooth. Disable Automatic Ear Detection for off-ear motion tests. Press a calibration pose only after the **AirPod sensor readings** counter begins increasing.
+
+See [the full beta installation notes](docs/BETA_DISTRIBUTION.md) for signed OTA distribution and updating the app.
+
 ## Field-test procedure
 
 1. Pair your AirPods Pro; for early tests leave one **board-mounted** AirPod outside its case and the other in its case. Disable Automatic Ear Detection if needed. Apple's API reports motion for only one active earbud at a time.

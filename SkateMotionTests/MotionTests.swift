@@ -35,6 +35,21 @@ final class MotionTests: XCTestCase {
         XCTAssertEqual(degrees, 0, accuracy: 0.05)
     }
 
+    func testCalibrationRequiresRealBoardAirPodSamples() {
+        XCTAssertFalse(BoardSensorReadiness.canCalibrate(
+            boardReadings: 0, detectedSide: "none", expectedSide: "left",
+            lastReading: nil, now: 100))
+        XCTAssertFalse(BoardSensorReadiness.canCalibrate(
+            boardReadings: 10, detectedSide: "right", expectedSide: "left",
+            lastReading: 99.5, now: 100))
+        XCTAssertFalse(BoardSensorReadiness.canCalibrate(
+            boardReadings: 10, detectedSide: "left", expectedSide: "left",
+            lastReading: 90, now: 100))
+        XCTAssertTrue(BoardSensorReadiness.canCalibrate(
+            boardReadings: 10, detectedSide: "left", expectedSide: "left",
+            lastReading: 99.5, now: 100))
+    }
+
     func testMissingCalibrationDoesNotDetect() {
         var detector = TrickDetector()
         let result = detector.accept(sample(at: 2, pitch: 0.3), calibration: BoardCalibration())
