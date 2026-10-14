@@ -75,6 +75,18 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     var headphoneAvailable: Bool { headphone.isDeviceMotionAvailable }
     var phoneAvailable: Bool { phone.isDeviceMotionAvailable }
     var liveDashboardURL: URL { TelemetryUploader.dashboardURL }
+    /// True only when the selected board AirPod has delivered a recent reading.
+    /// Do not confuse an active Core Motion manager with actual sensor data.
+    var boardSensorReady: Bool {
+        BoardSensorReadiness.canCalibrate(
+            boardReadings: boardSampleCount,
+            detectedSide: headphoneDetectedSide,
+            expectedSide: boardSide.rawValue,
+            lastReading: lastHeadphoneReadingAt,
+            now: ProcessInfo.processInfo.systemUptime
+        )
+    }
+
 
     override init() {
         super.init()
@@ -159,6 +171,19 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         } catch {
             status = "Stopped, but export failed: \(error.localizedDescription)"
         }
+    }
+
+    /// Allows a new guided calibration without ending the current session.
+    func resetCalibration() {
+        calibration = BoardCalibration()
+        calibrationPose = nil
+        calibrationStart = nil
+        calibrationRequestedAt = nil
+        calibrationGravities = []
+        calibrationProgress = 0
+        latestPitch = nil
+        detector.reset()
+        status = "Hold the board in each reference position to recalibrate."
     }
 
     func calibrate(_ pose: CalibrationPose) {

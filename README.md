@@ -6,6 +6,16 @@ This is a **working SwiftUI prototype** plus a **Cloudflare Worker / D1 telemetr
 
 **Live dashboard:** https://skatefit-motion-lab.mikejshaffer.workers.dev
 
+**Install latest iPhone beta (build 4):**
+https://skatefit-motion-lab.mikejshaffer.workers.dev/install
+
+The main screen now uses a live, native SwiftUI skateboard side view
+that follows calibrated AirPod pitch. Setup is a three-step guided
+calibration (flat, tail, nose). One Start/Stop button controls the session,
+while all developer diagnostics are under Advanced. Board angle alone
+does not confirm a landed manual or trick.
+
+
 **Beta privacy:** [Privacy and Data Policy](PRIVACY.md)
 
 **Remote diagnostics, API examples and calibration troubleshooting:** [Remote Debugging Guide](docs/REMOTE_DEBUGGING.md).

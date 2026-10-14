@@ -13,7 +13,7 @@ The public page serves an Apple OTA installation manifest, and a Cloudflare Work
 - Two provisioning profiles are installed: `SkateFit Motion Lab App Store Login` and `SkateFit Motion Lab Ad Hoc Login`.
 - Both are registered through App Store Connect API and correspond to the app's bundle identifier.
 - The Ad Hoc profile includes the intended test iPhone. Do not commit profiles or signed IPAs to Git.
-- Cloudflare bucket `skatefit-motion-betas` holds `ios/SkateFitMotionLab-0.1.0-3.ipa` and `ios/SkateFitMotionLab-icon.png`.
+- Cloudflare bucket `skatefit-motion-betas` holds `ios/SkateFitMotionLab-0.1.0-4.ipa` and `ios/SkateFitMotionLab-icon.png`.
 - Worker exposes `/install`, `/beta/manifest.plist`, `/beta/SkateFitMotionLab.ipa`, and `/beta/icon.png`.
 
 ## Rebuilding without Apple web login
@@ -61,11 +61,11 @@ xcodebuild -exportArchive \
 
 Verify the exported IPA by extracting it, checking that `codesign --verify --deep --strict` succeeds on `Payload/SkateMotion.app`, and inspecting `embedded.mobileprovision` with `security cms -D` to verify the intended device is included.
 
-**When shipping a new build:** increment `CFBundleVersion` in `project.yml`, regenerate the Xcode project, and rebuild. Update both the object key and OTA metadata version in `backend/src/beta.js` before redeploying the Worker. Upload the newly exported IPA under the matching key:
+**When shipping a new build:** increment `CFBundleVersion` in **both** `project.yml` and the checked-in `SkateMotion/Info.plist`, regenerate the Xcode project, and rebuild. Verify the actual signed IPA reports the new build number. XcodeGen does not reliably overwrite an already-present tracked Info.plist. Update both the object key and OTA metadata version in `backend/src/beta.js` before redeploying the Worker. Upload the newly exported IPA under the matching key:
 
 ```bash
 wrangler r2 object put \
-  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-3.ipa \
+  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-4.ipa \
   --file /tmp/skatefit-motion-beta-export/SkateMotion.ipa \
   --remote --content-type application/octet-stream
 
@@ -135,3 +135,24 @@ active-output diagnostics and cloud reporting. In Motion Lab:
 A live hardware test is still required. If the stream remains silent after the
 setup, compare behavior in the Kinapod app (which has a verified implementation
 using AirPods off ear) before changing skateboard algorithms.
+
+
+## Beta build 4: simplified skate screen
+
+The main screen is now built for riding instead of debugging. It contains:
+
+- A simple board-sensor connection indicator and one start/stop button.
+- A guided three-pose calibration: flat, tail down, nose down. Only the next
+  required position has an action, with a visible progress indicator.
+- A native SwiftUI side-view skateboard that tilts with calibrated
+  longitudinal pitch from the AirPod; positive angle means nose up (manual
+  orientation), while negative angle means tail up (nose manual orientation).
+- A live numerical angle readout; the phrase manual angle means a position
+  only, never a confirmed trick or landing.
+- AirPods audio routing and wake controls, cloud status, raw sensor counts,
+  CSV export, and the synthetic-data test still exist under Advanced.
+- Connection help with audio wake and retry actions available from a sheet.
+
+This build changes the signed iOS app but does not change the telemetry
+server API or data schema. Install over the previous beta via the same
+/install page. The production SkateFit app is unaffected.
