@@ -1,3 +1,6 @@
+import XCTest
+@testable import SkateMotion
+
 
 final class CalibrationQualityTests: XCTestCase {
     private func sample(gravity: Vector3 = Vector3(x: 0, y: 0, z: -1),
