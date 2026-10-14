@@ -42,10 +42,19 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
             UserDefaults.standard.set(boardSide.rawValue, forKey: Self.boardSideKey)
         }
     }
-    @Published var cloudSyncEnabled = true
+    private static let cloudSyncKey = "skatefitMotionLab.cloudSyncEnabled"
+    /// Public prototype dashboard: uploads are disabled until explicit consent.
+    /// The choice persists on device and opting out stops queued retries.
+    @Published var cloudSyncEnabled = UserDefaults.standard.bool(forKey: "skatefitMotionLab.cloudSyncEnabled") {
+        didSet {
+            UserDefaults.standard.set(cloudSyncEnabled, forKey: Self.cloudSyncKey)
+            if cloudSyncEnabled { cloud.startSync() }
+            else { cloud.stopSync() }
+        }
+    }
     @Published private(set) var sessionId = ""
     @Published private(set) var status = "Ready. Pair AirPods Pro and mount one securely."
-    @Published private(set) var cloudStatus = "Connecting to cloud..."
+    @Published private(set) var cloudStatus = "Cloud sync disabled"
     @Published private(set) var pendingCloudBatches = 0
     @Published private(set) var remoteRulesVersion = 0
     @Published private(set) var boardSampleCount = 0
@@ -145,7 +154,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
             self.detector.rules = rules
             self.detector.reset()
         }
-        cloud.startSync()
+        if cloudSyncEnabled { cloud.startSync() }
     }
 
     func startRecording() {
@@ -255,7 +264,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
             if headphoneTotalSamples > 0 && headphoneDetectedSide != boardSide.rawValue {
                 status = "AirPod \(headphoneDetectedSide) is streaming, but \(boardSide.rawValue) is selected. Stop recording and select the AirPod attached to the board."
             } else {
-                status = "Cannot calibrate: no recent board AirPod samples. Only phone motion is uploading. Check AirPods Bluetooth connection and Automatic Ear Detection, then tap Retry AirPods."
+                status = "Cannot calibrate: no recent board AirPod samples. Check AirPods Bluetooth connection and Automatic Ear Detection, then tap Retry AirPods."
             }
             ensureHeadphoneStream()
             return
@@ -370,6 +379,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     }
 
     func forceCloudSync() {
+        guard cloudSyncEnabled else { return }
         cloud.startSync()
         Task { await cloud.refreshRules() }
     }
@@ -484,7 +494,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         } else if calibration.isPhysicallyPlausible {
             let detected = detector.accept(sample, calibration: calibration)
             events.append(contentsOf: detected)
-            pendingCloudEvents.append(contentsOf: detected)
+            if cloudSyncEnabled { pendingCloudEvents.append(contentsOf: detected) }
             archive.noteEvents(detected)
         }
 

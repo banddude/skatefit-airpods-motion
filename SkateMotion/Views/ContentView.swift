@@ -379,7 +379,11 @@ struct ContentView: View {
 
                 Divider()
 
-                Toggle("Sync sessions over cellular", isOn: $store.cloudSyncEnabled)
+                Toggle("Share raw motion telemetry with public beta dashboard",
+                       isOn: $store.cloudSyncEnabled)
+                Text("OFF by default. If enabled, recordings upload to an unauthenticated public development server. Do not use for private data.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
                 LabeledContent("Cloud status", value: store.cloudStatus)
                 LabeledContent("Queued packets", value: "\(store.pendingCloudBatches)")
                 LabeledContent("Rules version", value: "\(store.remoteRulesVersion)")

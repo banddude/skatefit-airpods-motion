@@ -6,6 +6,7 @@ struct RunnerSceneView: View {
     let engine: RunnerEngine
     let deckColor: Color
     let reduceMotion: Bool
+    let highContrast: Bool
 
     private var theme: (Color, Color, Color) {
         switch engine.level {
@@ -43,9 +44,10 @@ struct RunnerSceneView: View {
         let ground = h * 0.76
         let (top, bottom, highlight) = theme
         context.fill(Path(CGRect(origin: .zero, size: size)),
-                     with: .linearGradient(Gradient(colors: [top, bottom]),
-                                           startPoint: .zero,
-                                           endPoint: CGPoint(x: 0, y: h)))
+                     with: highContrast ? .color(.black) :
+                     .linearGradient(Gradient(colors: [top, bottom]),
+                                     startPoint: .zero,
+                                     endPoint: CGPoint(x: 0, y: h)))
 
         // Moon and a fixed constellation use only deterministic geometry.
         circle(&context, x: w * 0.79, y: h * 0.19, radius: h * 0.105,
@@ -90,10 +92,10 @@ struct RunnerSceneView: View {
 
         // Skateable surface, street lights, and motion streaks.
         rectangle(&context, CGRect(x: 0, y: ground, width: w,
-                                   height: h - ground), color: Color(red: 0.065,
+                                   height: h - ground), color: highContrast ? .black : Color(red: 0.065,
                                     green: 0.083, blue: 0.14))
         rectangle(&context, CGRect(x: 0, y: ground, width: w, height: 4),
-                  color: highlight.opacity(0.8))
+                  color: highContrast ? .white : highlight.opacity(0.8))
         let laneOffset = CGFloat((engine.distance * 10).truncatingRemainder(dividingBy: 70))
         for index in -1..<Int(w / 70) + 2 {
             rectangle(&context, CGRect(x: CGFloat(index) * 70 - laneOffset,
@@ -116,18 +118,18 @@ struct RunnerSceneView: View {
                     width: 3, height: 12), color: .orange)
             case .barrier:
                 let rect = CGRect(x: x, y: ground - 34, width: itemWidth, height: 34)
-                rectangle(&context, rect, color: Color(red: 0.96, green: 0.34, blue: 0.29))
+                rectangle(&context, rect, color: highContrast ? .yellow : Color(red: 0.96, green: 0.34, blue: 0.29))
                 for stripe in 0..<3 {
                     rectangle(&context, CGRect(x: x + 3, y: ground - 29 + CGFloat(stripe) * 10,
                         width: max(1, itemWidth - 6), height: 3), color: .white.opacity(0.55))
                 }
             case .overhead:
                 rectangle(&context, CGRect(x: x, y: ground - 67,
-                    width: itemWidth, height: 13), color: .purple)
+                    width: itemWidth, height: 13), color: highContrast ? .white : .purple)
                 rectangle(&context, CGRect(x: x, y: ground - 67,
-                    width: itemWidth, height: 3), color: .pink)
+                    width: itemWidth, height: 3), color: highContrast ? .yellow : .pink)
                 rectangle(&context, CGRect(x: x + itemWidth - 4, y: ground - 55,
-                    width: 4, height: 55), color: .purple.opacity(0.7))
+                    width: 4, height: 55), color: highContrast ? .white : .purple.opacity(0.7))
             case .manualLine, .noseLine:
                 let lineColor: Color = feature.kind == .manualLine ? .yellow : .cyan
                 rectangle(&context, CGRect(x: x, y: ground - 5,

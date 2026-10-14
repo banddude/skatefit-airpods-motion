@@ -165,7 +165,8 @@ struct ManualRunnerGame: View {
 
             ZStack(alignment: .bottomLeading) {
                 RunnerSceneView(engine: engine, deckColor: deckColor,
-                                reduceMotion: reduceSceneMotion || systemReduceMotion)
+                                reduceMotion: reduceSceneMotion || systemReduceMotion,
+                                highContrast: highContrast)
                 LinearGradient(colors: [.clear, background.opacity(0.76)],
                                startPoint: .center, endPoint: .bottom)
                     .clipShape(RoundedRectangle(cornerRadius: 23))
@@ -486,7 +487,8 @@ struct ManualRunnerGame: View {
                 .padding(.horizontal, 5)
 
                 RunnerSceneView(engine: engine, deckColor: deckColor,
-                                reduceMotion: reduceSceneMotion || systemReduceMotion)
+                                reduceMotion: reduceSceneMotion || systemReduceMotion,
+                                highContrast: highContrast)
 
 
                 HStack(spacing: 8) {
