@@ -45,6 +45,8 @@ struct MotionDiagnostics: Codable {
     let headphoneReadings: Int
     let phoneReadings: Int
     let message: String
+    let audioOutput: String?
+    let audioWakeStatus: String?
 }
 
 private struct TelemetryBatch: Codable {

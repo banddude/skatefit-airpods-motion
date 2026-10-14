@@ -13,7 +13,7 @@ The public page serves an Apple OTA installation manifest, and a Cloudflare Work
 - Two provisioning profiles are installed: `SkateFit Motion Lab App Store Login` and `SkateFit Motion Lab Ad Hoc Login`.
 - Both are registered through App Store Connect API and correspond to the app's bundle identifier.
 - The Ad Hoc profile includes the intended test iPhone. Do not commit profiles or signed IPAs to Git.
-- Cloudflare bucket `skatefit-motion-betas` holds `ios/SkateFitMotionLab-0.1.0-2.ipa` and `ios/SkateFitMotionLab-icon.png`.
+- Cloudflare bucket `skatefit-motion-betas` holds `ios/SkateFitMotionLab-0.1.0-3.ipa` and `ios/SkateFitMotionLab-icon.png`.
 - Worker exposes `/install`, `/beta/manifest.plist`, `/beta/SkateFitMotionLab.ipa`, and `/beta/icon.png`.
 
 ## Rebuilding without Apple web login
@@ -65,7 +65,7 @@ Verify the exported IPA by extracting it, checking that `codesign --verify --dee
 
 ```bash
 wrangler r2 object put \
-  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-2.ipa \
+  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-3.ipa \
   --file /tmp/skatefit-motion-beta-export/SkateMotion.ipa \
   --remote --content-type application/octet-stream
 
@@ -110,3 +110,28 @@ A live session had over 12,000 phone readings and no AirPod readings. This preve
 If using the AirPod outside your ear, disable Automatic Ear Detection and verify Bluetooth reports it **Connected**. Pairing alone is not proof that iOS is delivering headphone motion.
 
 Production D1 migration: \`wrangler d1 execute skatefit-motion-lab --remote --file backend/migrations/0002_sensor_diagnostics.sql\`, applied once.
+
+
+## Beta build 3: AirPods audio routing and wake
+
+A real iPhone session reported \`headphoneAvailable=true\`, \`headphoneActive=true\`,
+\`permission=Authorized\` yet produced **zero headphone sensor callbacks**.
+The Kinapod developer documents two device settings needed for off-ear use:
+turn off Automatic Ear Detection, **and** set the AirPods microphone to the
+specific mounted earbud (not Automatic). If motion stays dormant, play audio
+briefly to wake the stream.
+
+Build 3 adds an Apple system audio output picker, a quiet 0.5-second wake tone,
+active-output diagnostics and cloud reporting. In Motion Lab:
+
+1. In Settings → Bluetooth → AirPods Pro, disable Automatic Ear Detection and
+   choose the mounted earbud in Microphone.
+2. Start recording and use the system route picker in the AirPods connection section.
+   Select the AirPods audio destination rather than the iPhone speaker.
+3. Tap **Play wake tone through selected output**, then watch **AirPod sensor readings**.
+4. Only calibrate after that count increases. A motion manager saying "active"
+   without readings is not sufficient.
+
+A live hardware test is still required. If the stream remains silent after the
+setup, compare behavior in the Kinapod app (which has a verified implementation
+using AirPods off ear) before changing skateboard algorithms.

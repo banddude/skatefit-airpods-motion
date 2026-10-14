@@ -60,7 +60,11 @@ async function ingest(request,db) {
       || !["boardReadings","headphoneReadings","phoneReadings"].every(
          key=>Number.isSafeInteger(diagnostics[key]) && diagnostics[key]>=0)
       || typeof diagnostics.message!=="string"
-      || diagnostics.message.length>500)
+      || diagnostics.message.length>500
+      || (diagnostics.audioOutput!=null &&
+          (typeof diagnostics.audioOutput!=="string" || diagnostics.audioOutput.length>240))
+      || (diagnostics.audioWakeStatus!=null &&
+          (typeof diagnostics.audioWakeStatus!=="string" || diagnostics.audioWakeStatus.length>500)))
       return failure("Invalid sensor diagnostics.");
   }
   const existing=await db.prepare("SELECT id FROM batches WHERE batch_id=?").bind(data.batchId).first();

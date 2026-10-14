@@ -173,3 +173,13 @@ The test suite covers manuals/nose manuals, board pitch calibration, sideways ti
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+
+### AirPod sensor wake-up (build 3)
+
+If the AirPod manager reports **available, authorized, active** but the AirPod
+sample count remains zero, switch off **Automatic Ear Detection**, select the
+**mounted earbud under Bluetooth → AirPods → Microphone**, and choose AirPods as
+the audio output with the in-app picker. The app now includes a short wake tone
+and reports the selected audio destination to the live dashboard. This matches
+the off-ear setup documented by [Kinapod Disc](https://kinapod.com/disk/faq/).

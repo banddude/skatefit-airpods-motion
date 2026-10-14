@@ -1,4 +1,5 @@
 import SwiftUI
+import AVKit
 
 struct ContentView: View {
     @StateObject private var store = MotionStore()
@@ -36,6 +37,21 @@ struct ContentView: View {
                     LabeledContent("Detected AirPod", value: store.headphoneDetectedSide.capitalized)
                     LabeledContent("AirPod sensor readings", value: "\(store.headphoneTotalSamples)")
                     Button("Retry AirPods connection") { store.retryHeadphones() }
+                    LabeledContent("Current audio output", value: store.audioOutput)
+                    HStack {
+                        Text("Choose AirPods audio output")
+                        Spacer()
+                        AirPodsAudioRoutePicker()
+                            .frame(width: 45, height: 44)
+                    }
+                    Button("Play wake tone through selected output") { store.wakeAirPods() }
+                    Text(store.audioWakeStatus)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Button("Refresh audio route") { store.refreshAudioOutput() }
+                    Text("When off-ear, turn off Automatic Ear Detection AND choose the mounted AirPod for Microphone in Bluetooth settings. Route audio to the AirPods and play a short tone. A connected, active motion stream does not guarantee readings are arriving.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     Text("If only phone readings appear, open Settings → Bluetooth → your AirPods Pro. Verify Connected, turn Automatic Ear Detection OFF, and return here. You can temporarily wear one AirPod to confirm its motion sensors are working.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -145,4 +161,17 @@ struct ContentView: View {
             .navigationTitle("SkateFit Motion Lab")
         }
     }
+}
+
+/// This is Apple's route selection control, not an attempt to programmatically
+/// force Bluetooth routing or select which earbud contains the motion sensor.
+struct AirPodsAudioRoutePicker: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let view = AVRoutePickerView()
+        view.tintColor = .systemTeal
+        view.activeTintColor = .systemGreen
+        view.prioritizesVideoDevices = false
+        return view
+    }
+    func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
 }

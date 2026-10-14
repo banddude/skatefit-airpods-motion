@@ -87,6 +87,13 @@ final class MotionTests: XCTestCase {
         XCTAssertTrue(result.isEmpty)
     }
 
+    func testWakeToneIsValidWAVStructure() {
+        let data = AirPodAudioWake.makeToneWAV()
+        XCTAssertGreaterThan(data.count, 22_000)
+        XCTAssertEqual(String(data: data.prefix(4), encoding: .utf8), "RIFF")
+        XCTAssertEqual(String(data: data.dropFirst(8).prefix(4), encoding: .utf8), "WAVE")
+    }
+
     func testCSVSchemaIsStable() {
         let row = sample(at: 1.234, pitch: 0).csvRow
         XCTAssertEqual(row.split(separator: ",").count,

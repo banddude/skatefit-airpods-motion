@@ -1,4 +1,5 @@
 import Combine
+import AVFoundation
 import CoreMotion
 import Foundation
 import SwiftUI
@@ -35,6 +36,8 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     @Published private(set) var headphoneStreamActive = false
     @Published private(set) var headphoneDetectedSide = "none"
     @Published private(set) var headphoneTotalSamples = 0
+    @Published private(set) var audioOutput = "Not checked"
+    @Published private(set) var audioWakeStatus = "Not yet played."
     @Published private(set) var calibrationProgress: Double = 0
     @Published private(set) var latestPitch: Double?
     @Published private(set) var calibration = BoardCalibration()
@@ -45,6 +48,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     private let headphone = CMHeadphoneMotionManager()
     private let phone = CMMotionManager()
     private let cloud = TelemetryUploader()
+    private let audioWake = AirPodAudioWake()
     private var subscriptions = Set<AnyCancellable>()
     private let queue: OperationQueue = {
         let q = OperationQueue()
@@ -76,6 +80,12 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         super.init()
         headphone.delegate = self
         updateHeadphonePermission()
+        refreshAudioOutput()
+        NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in self?.refreshAudioOutput() }
+            }
+            .store(in: &subscriptions)
         cloud.$status.sink { [weak self] in self?.cloudStatus = $0 }
             .store(in: &subscriptions)
         cloud.$queuedBatchCount.sink { [weak self] in self?.pendingCloudBatches = $0 }
@@ -178,6 +188,22 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         status = "Hold \(pose.rawValue.lowercased()) steady for about 1.5 seconds."
     }
 
+    func refreshAudioOutput() {
+        audioOutput = AirPodAudioWake.audioOutputDescription()
+    }
+
+    func wakeAirPods() {
+        refreshAudioOutput()
+        do {
+            audioWakeStatus = try audioWake.wake()
+        } catch {
+            audioWakeStatus = "Audio wake failed: \(error.localizedDescription)"
+        }
+        refreshAudioOutput()
+        // Only restart the stream if no active board data has arrived.
+        if isRecording, headphoneTotalSamples == 0 { ensureHeadphoneStream() }
+    }
+
     func retryHeadphones() {
         updateHeadphonePermission()
         headphone.stopDeviceMotionUpdates()
@@ -212,7 +238,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         if headphone.isDeviceMotionActive && !stale {
             headphoneStreamActive = true
             if lastHeadphoneReadingAt == nil {
-                headphoneStatus = "AirPods motion stream active; waiting for first reading."
+                headphoneStatus = "AirPods sensor opened, but no readings. Set the mounted AirPod as Microphone, turn off Automatic Ear Detection, and play a brief wake tone through AirPods."
             }
             return
         }
@@ -288,7 +314,9 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
                 boardReadings: boardSampleCount,
                 headphoneReadings: headphoneTotalSamples,
                 phoneReadings: phoneSampleCount,
-                message: headphoneStatus
+                message: headphoneStatus,
+                audioOutput: audioOutput,
+                audioWakeStatus: audioWakeStatus
             )
             let saved = cloud.enqueue(sessionId: sessionId, boardSide: boardSide,
                                       samples: chunk, events: taggedEvents,
