@@ -22,96 +22,57 @@ struct ContentView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    Picker("Screen", selection: $gameMode) {
-                        Text("Skate").tag(true)
-                        Text("Setup & Lab").tag(false)
-                    }
-                    .pickerStyle(.segmented)
-                    if gameMode {
-                        gameHome
-                    } else {
-                    connectionBanner
+            VStack(spacing: 0) {
+                Picker("Screen", selection: $gameMode) {
+                    Text("Play").tag(true)
+                    Text("Motion Lab").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
 
-                    if !store.hasCalibration {
-                        recordingControls
-                        calibrationCard
-                    }
-
-                    BoardAngleCard(
-                        pitch: store.hasCalibration ? store.latestPitch : nil,
-                        calibrated: store.hasCalibration,
-                        recording: store.isRecording,
-                        manualLimit: store.calibration.manualUpperLimit
-                    )
-
-                    if store.hasCalibration {
-                        Board3DCard(orientation: store.latestOrientation,
-                                    recording: store.isRecording)
-                        recordingControls
-                        readyCard
-                    }
-
-                    if store.isRecording || store.exportedFile != nil {
-                        SessionStatisticsCard(stats: store.liveStatistics,
-                                              recording: store.isRecording)
-                    }
-                    savedSessionsButton
-
-                    if let latest = store.events.last {
-                        latestEventCard(latest)
-                    }
-
-                    advancedCard
+                if gameMode {
+                    ManualRunnerGame(store: store, openMotionLab: {
+                        gameMode = false
+                    })
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            connectionBanner
+                            if !store.hasCalibration {
+                                recordingControls
+                                calibrationCard
+                            }
+                            BoardAngleCard(
+                                pitch: store.hasCalibration ? store.latestPitch : nil,
+                                calibrated: store.hasCalibration,
+                                recording: store.isRecording,
+                                manualLimit: store.calibration.manualUpperLimit
+                            )
+                            if store.hasCalibration {
+                                Board3DCard(orientation: store.latestOrientation,
+                                            recording: store.isRecording)
+                                recordingControls
+                                readyCard
+                            }
+                            if store.isRecording || store.exportedFile != nil {
+                                SessionStatisticsCard(stats: store.liveStatistics,
+                                                      recording: store.isRecording)
+                            }
+                            savedSessionsButton
+                            if let latest = store.events.last {
+                                latestEventCard(latest)
+                            }
+                            advancedCard
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 18)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 18)
             }
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("SkateFit")
             .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-
-    private var gameHome: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            ManualRunnerGame(store: store)
-            VStack(alignment: .leading, spacing: 6) {
-                Text("SKATE SESSION")
-                    .font(.caption.weight(.bold)).foregroundStyle(.teal)
-                Text(store.isRecording ? "You're skating" : "Ready to skate?")
-                    .font(.largeTitle.weight(.bold))
-                Text(store.hasCalibration ? "Track your moves, build your stats." :
-                     "Set up your board once, then start skating.")
-                    .foregroundStyle(.secondary)
-            }
-            if store.hasCalibration {
-                Board3DCard(orientation: store.latestOrientation, recording: store.isRecording)
-                SessionStatisticsCard(stats: store.liveStatistics, recording: store.isRecording)
-            } else {
-                Label("Board calibration needed", systemImage: "airpodspro")
-                    .foregroundStyle(.orange)
-                    .padding()
-            }
-            if store.hasCalibration {
-                recordingControls
-            } else {
-                Button("Set up my board") { gameMode = false }
-                    .buttonStyle(.borderedProminent)
-                    .frame(maxWidth: .infinity)
-            }
-            HStack {
-                Label("Possible tricks", systemImage: "bolt.fill")
-                Spacer()
-                Text("\(store.liveStatistics.possibleEvents)")
-                    .font(.title2.bold()).monospacedDigit()
-            }.padding().background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-            SkateGameCard(sessions: store.savedSessions, current: store.liveStatistics, recording: store.isRecording)
-            savedSessionsButton
-            Button("Board settings & calibration") { gameMode = false }
-                .font(.subheadline)
         }
     }
 
