@@ -1,6 +1,6 @@
 # SkateFit Motion Lab beta: data and privacy
 
-**Last updated: October 14, 2026.**
+**Last updated: October 19, 2026.**
 
 SkateFit Motion Lab is a public, experimental research prototype that uses the iPhone's motion sensors and compatible AirPods to investigate skateboard trick recognition.
 
@@ -37,3 +37,12 @@ No data is sold to advertisers, and the app does not use advertising or tracking
 Cloud sync is off by default. The switch in Motion Lab → Advanced explicitly enables public experimental uploads. Turning it off also stops retrying any pending uploads until you choose to enable it again. This does not automatically erase already-uploaded sessions. You can submit an issue at [the project's GitHub repository](https://github.com/banddude/skatefit-airpods-motion/issues) about deleting a session or making a privacy-related change.
 
 This privacy notice applies only to the experimental **SkateFit Motion Lab** prototype, not the separate production SkateFit application.
+
+
+## Optional local Apple TV companion
+
+The iPhone candidate build 17 adds an explicit Find Apple TV / Connect flow. Local network discovery and connection occur only after user action and iOS Local Network permission. Enter the code displayed by the TV to establish a session-only TLS-encrypted link. No pairing secret is uploaded, advertised, logged or saved. The bridge sends a current calibrated board pose and limited live practice statistics only to the paired TV. No camera imagery, microphone recordings, GPS coordinates, contact lists or full raw-motion archives are included.
+
+The bridge does not change the separate cloud telemetry toggle or enable cloud uploads. Backgrounding or locking the iPhone stops TV sharing. The TV discards stale sensor frames and pauses board-controlled games. No automatic screen capture, AirPlay mirroring or camera use is involved.
+
+The native tvOS candidate stores game career results in its local app preferences. It does not synchronize game careers with iPhone or implement cloud restore. Detailed manual practice history and raw CSV remain on the phone. A user can disconnect the link at either device and re-pair with a new code.

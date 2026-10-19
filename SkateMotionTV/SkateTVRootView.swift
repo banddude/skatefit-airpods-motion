@@ -60,7 +60,7 @@ struct SkateTVRootView: View {
         }
         .padding(.horizontal, 60)
         .padding(.vertical, 42)
-        .foregroundStyle(.white)
+        .preferredColorScheme(.dark)
         .background(background.ignoresSafeArea())
         .onReceive(ticker) { _ in tick() }
         .onPlayPauseCommand {
@@ -93,8 +93,9 @@ struct SkateTVRootView: View {
                     .background(panel, in: RoundedRectangle(cornerRadius: 24))
                 Text(frame?.orientation?.deckFace ?? "Pair an iPhone and calibrate the mounted AirPod")
                     .font(.headline).foregroundStyle(accent)
-                Text("The 3D deck shows measured relative orientation, including upside-down. It does not show absolute position, wheel contact or confirmed landed tricks.")
+                Text("Sensor orientation only. Absolute position, wheel contact and landed tricks are not measured.")
                     .font(.caption).foregroundStyle(.white.opacity(0.65))
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity)
             VStack(alignment: .leading, spacing: 20) {

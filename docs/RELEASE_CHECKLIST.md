@@ -84,3 +84,21 @@ xcodebuild -project SkateMotion.xcodeproj -scheme SkateMotion -destination 'plat
 - [x] Dropout pauses rather than silently switching control modes; Touch must be chosen explicitly.
 - [ ] Test physical board-connected gameplay, input sign, 3D view, packet jitter and sustained rendering performance.
 - [ ] Verify game source choice remains correct when old versions had saved Touch mode.
+
+
+## Native Apple TV candidate and iPhone companion
+
+- [x] Separate tvOS 17+ native application, landscape focus-driven UI, manual dashboard and 15-course game.
+- [x] Shared calibrated 3D quaternion board renderer, including upside-down orientation.
+- [x] Explicit session-code pairing and encrypted local-network bridge; no direct AirPod-to-TV assumption.
+- [x] Real TLS loopback verification for accepted and rejected pairing codes.
+- [x] Nonce, monotonic sequence, source-session and stale-frame gates; board runs pause on data loss.
+- [x] No camera use and no GPS transmission; existing cloud telemetry settings remain unchanged.
+- [x] Source builds declare both platforms and include automated platform tests.
+- [ ] Install signed tvOS build on a paired physical Apple TV with the correct tvOS profile.
+- [ ] Install the new iPhone companion while preserving existing data; verify LAN permissions and discovery.
+- [ ] Validate actual mounted AirPod → iPhone → TV latency, inversion, hold display and dropouts.
+- [ ] Approve physical Siri Remote focus, gamepad navigation and all courses on a real TV.
+- [ ] Approve TestFlight/App Store packaging; do not treat the iPhone Safari installer as a TV installer.
+
+See [Apple TV implementation and deployment runbook](APPLE_TV.md). CI results are recorded per commit; physical checks remain separate.

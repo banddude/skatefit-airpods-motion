@@ -5,6 +5,7 @@ let package = Package(name: "SkateFitBridgeChecks",
     products: [.library(name: "SkateFitCore", targets: ["SkateFitCore"])],
     targets: [
         .target(name: "SkateFitCore", path: ".", exclude: [
+            "docs/APPLE_TV.md",
             "SkateMotionTVUITests",
             "SkateMotionTV/PrivacyInfo.xcprivacy",
             "TVBridgeTests/TVBridgeSenderTests.swift",

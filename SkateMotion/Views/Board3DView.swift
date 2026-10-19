@@ -99,7 +99,11 @@ struct Board3DView: UIViewRepresentable {
 
         let camera = SCNNode()
         camera.camera = SCNCamera()
+        #if os(tvOS)
+        camera.camera?.fieldOfView = 34
+        #else
         camera.camera?.fieldOfView = 46
+        #endif
         camera.camera?.zNear = 0.1
         camera.camera?.zFar = 100
         camera.position = SCNVector3(4.7, 3.25, 7.4)
