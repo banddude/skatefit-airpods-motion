@@ -17,6 +17,7 @@ targets:
       - path: SkateMotion
         excludes:
           - Info.plist
+      - path: Shared
     info:
       path: SkateMotion/Info.plist
       properties:
@@ -25,6 +26,9 @@ targets:
         CFBundleVersion: "16"
         NSMotionUsageDescription: "SkateFit records board-mounted AirPod orientation and motion to coach manual balance and research skateboard movement."
         NSLocationWhenInUseUsageDescription: "Optional outdoor speed from this iPhone while practicing. GPS coordinates are not saved or uploaded."
+        NSLocalNetworkUsageDescription: "Connect this iPhone to your Apple TV to share board motion on your local network. No camera or internet server is used."
+        NSBonjourServices:
+          - _skatefit._tcp
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -56,3 +60,40 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.banddude.skatefit.motionlab.uitests
+
+  SkateMotionTV:
+    type: application
+    platform: tvOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: SkateMotionTV
+        excludes:
+          - Info.plist
+      - path: Shared
+      - path: SkateMotion/Models/BoardMathTypes.swift
+      - path: SkateMotion/Models/BoardOrientation.swift
+      - path: SkateMotion/Models/RunnerCourse.swift
+      - path: SkateMotion/Models/RunnerEngine.swift
+      - path: SkateMotion/Models/RunnerInput.swift
+      - path: SkateMotion/Models/RunnerProgressStore.swift
+      - path: SkateMotion/Views/Board3DView.swift
+      - path: SkateMotion/Views/RunnerSceneView.swift
+      - path: SkateMotion/PrivacyInfo.xcprivacy
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.banddude.skatefit.motionlab.tv
+        TARGETED_DEVICE_FAMILY: "3"
+        GENERATE_INFOPLIST_FILE: "NO"
+        INFOPLIST_FILE: SkateMotionTV/Info.plist
+        ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS: "NO"
+  SkateMotionTVTests:
+    type: bundle.unit-test
+    platform: tvOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: TVBridgeTests
+    dependencies:
+      - target: SkateMotionTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.banddude.skatefit.motionlab.tv.tests

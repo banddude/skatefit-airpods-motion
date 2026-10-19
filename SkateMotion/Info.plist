@@ -30,5 +30,11 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect to your Apple TV to share board motion over an encrypted local network link. No camera is used.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_skatefit._tcp</string>
+	</array>
 </dict>
 </plist>

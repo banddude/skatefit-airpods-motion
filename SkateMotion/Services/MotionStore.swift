@@ -96,6 +96,8 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     @Published private(set) var events: [TrickEvent] = []
     @Published private(set) var exportedFile: URL?
 
+    let tvSender = TVBoardSender()
+
     private let headphone = CMHeadphoneMotionManager()
     private let phone = CMMotionManager()
     private let cloud = TelemetryUploader()
@@ -142,6 +144,26 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     }
     var liveDashboardURL: URL { TelemetryUploader.dashboardURL }
 
+    /// Explicitly paired TV receives a current display/game snapshot only.
+    /// Do not send source clocks as if they were synchronised with the TV.
+    private var tvBridgeFrame: TVBoardFrame {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard isRecording, !isSyntheticDemo, calibrationPose == nil,
+              hasCalibration, boardSensorReady, let last = lastGamePitchAt,
+              now >= last, now - last <= 0.20,
+              let orientation = latestOrientation else { return .inactive }
+        return TVBoardFrame(sourceSessionID: sessionId, sequence: boardSampleCount,
+            ready: true, sensorAgeSeconds: now - last, orientation: orientation,
+            engagementDegrees: max(5, balanceSettings.validated.targetAngleDegrees -
+                                     balanceSettings.validated.toleranceDegrees),
+            goalSeconds: balanceSettings.validated.goalSeconds,
+            holdSeconds: balance.currentHoldSeconds,
+            bestManualSeconds: balance.longestManualSeconds,
+            bestNoseSeconds: balance.longestNoseManualSeconds,
+            stability: balance.stability, wobbleDegrees: balance.wobbleRMSE,
+            sampleRate: boardHealth.sampleRateHz)
+    }
+
     func savedCSV(for session: SavedSkateSession) -> URL {
         archive.fileURL(for: session)
     }
@@ -169,6 +191,7 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
 
     override init() {
         super.init()
+        tvSender.frameProvider = { [weak self] in self?.tvBridgeFrame ?? .inactive }
         savedSessions = archive.history
         savedManualPractices = balanceHistory.sessions
         if let data = UserDefaults.standard.data(forKey: Self.balanceSettingsKey),

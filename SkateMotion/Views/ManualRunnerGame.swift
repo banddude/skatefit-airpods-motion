@@ -184,6 +184,16 @@ struct ManualRunnerGame: View {
                     .tracking(3).foregroundStyle(accent)
             }
             Spacer()
+            NavigationLink {
+                TVLinkView(store: store)
+            } label: {
+                Image(systemName: "appletv.fill")
+                    .font(.system(size: 19, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .background(soft, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .accessibilityLabel("Connect Apple TV")
+            .accessibilityIdentifier("connectAppleTV")
             Button { page = .settings } label: {
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: 17, weight: .semibold))

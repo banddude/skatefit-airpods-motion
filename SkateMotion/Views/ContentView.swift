@@ -5,6 +5,7 @@ import AVKit
 /// and start/stop a session. The former debug console lives under Advanced.
 struct ContentView: View {
     @StateObject private var store = MotionStore()
+    @Environment(\.scenePhase) private var appScenePhase
     @State private var showAdvanced = false
     @State private var gameMode = true
     @State private var showRunner = true
@@ -77,6 +78,9 @@ struct ContentView: View {
             .navigationTitle(gameMode ? "" : "Motion Lab")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(gameMode ? .hidden : .visible, for: .navigationBar)
+            .onChange(of: appScenePhase) { _, phase in
+                if phase != .active { store.tvSender.stop() }
+            }
         }
     }
 
