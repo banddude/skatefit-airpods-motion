@@ -225,9 +225,11 @@ enum TVBridgeSecurity {
             isHosting = true
             status = "On your iPhone: Connect Apple TV, select this TV, enter this code."
             listener.start(queue: .main)
-            timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+            let clock = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
                 Task { @MainActor [weak self] in self?.tick() }
             }
+            timer = clock
+            RunLoop.main.add(clock, forMode: .common)
         } catch {
             stop()
             status = "Could not start local TV pairing."

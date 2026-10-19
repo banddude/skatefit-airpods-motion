@@ -23,7 +23,7 @@ targets:
       properties:
         CFBundleDisplayName: SkateFit Motion Lab
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "16"
+        CFBundleVersion: "17"
         NSMotionUsageDescription: "SkateFit records board-mounted AirPod orientation and motion to coach manual balance and research skateboard movement."
         NSLocationWhenInUseUsageDescription: "Optional outdoor speed from this iPhone while practicing. GPS coordinates are not saved or uploaded."
         NSLocalNetworkUsageDescription: "Connect this iPhone to your Apple TV to share board motion on your local network. No camera or internet server is used."
@@ -78,7 +78,6 @@ targets:
       - path: SkateMotion/Models/RunnerProgressStore.swift
       - path: SkateMotion/Views/Board3DView.swift
       - path: SkateMotion/Views/RunnerSceneView.swift
-      - path: SkateMotion/PrivacyInfo.xcprivacy
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.banddude.skatefit.motionlab.tv
@@ -98,3 +97,15 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.banddude.skatefit.motionlab.tv.tests
+
+  SkateMotionTVUITests:
+    type: bundle.ui-testing
+    platform: tvOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: SkateMotionTVUITests
+    dependencies:
+      - target: SkateMotionTV
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.banddude.skatefit.motionlab.tv.uitests
