@@ -32,7 +32,8 @@ enum TVBridgeSecurity {
         keyData.withUnsafeBytes { key in
             identityData.withUnsafeBytes { identity in
                 sec_protocol_options_add_pre_shared_key(tls.securityProtocolOptions,
-                    DispatchData(bytes: key), DispatchData(bytes: identity))
+                    DispatchData(bytes: key) as __DispatchData,
+                    DispatchData(bytes: identity) as __DispatchData)
             }
         }
         sec_protocol_options_append_tls_ciphersuite(tls.securityProtocolOptions,
