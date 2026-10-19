@@ -75,16 +75,26 @@ struct RunnerCompletion {
     private(set) var saveError: String?
     let saveURL: URL
     private let fileManager: FileManager
+    #if os(tvOS)
+    private let tvPreferences: UserDefaults?
+    private static let tvSaveKey = "SkateFitTV.runner.career.v1"
+    #endif
 
     init(directory: URL? = nil, fileManager: FileManager = .default) {
         self.fileManager = fileManager
+        #if os(tvOS)
+        tvPreferences = directory == nil ? UserDefaults.standard : nil
+        let base = directory ?? fileManager.urls(for: .cachesDirectory,
+            in: .userDomainMask).first!.appendingPathComponent("SkateFitRunner", isDirectory: true)
+        #else
         let base = directory ?? fileManager.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
         ).first!.appendingPathComponent("SkateFitRunner", isDirectory: true)
+        #endif
         saveURL = base.appendingPathComponent("career-v1.json")
         let backup = base.appendingPathComponent("career-v1.backup.json")
-        func load(_ url: URL) -> RunnerCareer? {
-            guard let bytes = try? Data(contentsOf: url),
+        func decode(_ bytes: Data?) -> RunnerCareer? {
+            guard let bytes,
                   let decoded = try? JSONDecoder().decode(RunnerCareer.self, from: bytes),
                   decoded.version == 1,
                   decoded.completedRuns >= 0,
@@ -94,8 +104,15 @@ struct RunnerCompletion {
                   }) else { return nil }
             return decoded
         }
-        let primary = load(saveURL)
-        let backupData = load(backup)
+        #if os(tvOS)
+        let primary = decode(tvPreferences?.data(forKey: Self.tvSaveKey)) ??
+            decode(try? Data(contentsOf: saveURL))
+        let backupData = decode(tvPreferences?.data(forKey: Self.tvSaveKey + ".backup")) ??
+            decode(try? Data(contentsOf: backup))
+        #else
+        let primary = decode(try? Data(contentsOf: saveURL))
+        let backupData = decode(try? Data(contentsOf: backup))
+        #endif
         career = primary ?? backupData ?? RunnerCareer()
         recoveredFromBackup = primary == nil && backupData != nil
     }
@@ -142,6 +159,20 @@ struct RunnerCompletion {
         let backupURL = saveURL.deletingLastPathComponent()
             .appendingPathComponent("career-v1.backup.json")
         do {
+            #if os(tvOS)
+            // tvOS permits only cache files; keep the small career record in
+            // app preferences instead of relying on purgeable file storage.
+            if let tvPreferences {
+                let encoded = try JSONEncoder().encode(career)
+                if let old = tvPreferences.data(forKey: Self.tvSaveKey),
+                   (try? JSONDecoder().decode(RunnerCareer.self, from: old)) != nil {
+                    tvPreferences.set(old, forKey: Self.tvSaveKey + ".backup")
+                }
+                tvPreferences.set(encoded, forKey: Self.tvSaveKey)
+                saveError = nil
+                return
+            }
+            #endif
             try fileManager.createDirectory(at: saveURL.deletingLastPathComponent(),
                                             withIntermediateDirectories: true)
             let encoder = JSONEncoder()

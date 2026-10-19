@@ -310,10 +310,10 @@ struct SkateTVRootView: View {
     }
 
     private func tick() {
+        guard inGame else { return }
         let now = ProcessInfo.processInfo.systemUptime
         let dt = min(0.08, max(0, now - lastTick))
         lastTick = now
-        guard inGame else { return }
         let pad = GCController.controllers().compactMap(\.extendedGamepad).first
         let controller = RunnerInput(
             manual: now < remoteManualUntil || pad?.buttonA.isPressed == true || pad?.rightTrigger.isPressed == true,
