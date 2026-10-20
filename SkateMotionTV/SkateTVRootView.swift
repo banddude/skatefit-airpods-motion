@@ -180,7 +180,7 @@ struct SkateTVRootView: View {
             VStack(alignment: .leading, spacing: 24) {
                 Text("MANUAL RUNNER").font(.system(size: 44, weight: .black, design: .rounded))
                 Text(RunnerCourse.get(selectedCourse).name).font(.title2)
-                Text("15 courses. Pop gaps with a nose-up manual; duck by lifting the tail. Board-controlled runs wait for a real tilt before moving.")
+                Text("15 courses. Hold a manual to stay elevated; hold a nose manual to stay ducked. Level the board to release. Runs wait for a real tilt before moving.")
                     .font(.title3).foregroundStyle(.white.opacity(0.75))
                 Button("Ride with board AirPod") { begin(.motion) }
                     .disabled(frame == nil)

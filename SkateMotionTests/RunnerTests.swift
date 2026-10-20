@@ -2,16 +2,22 @@ import XCTest
 @testable import SkateMotion
 
 final class RunnerTests: XCTestCase {
-    func testManualRisingEdgeJumpsOnlyOnceWhileHeld() {
+    func testManualStaysElevatedWhileHeldAndFallsOnRelease() {
         let game = RunnerEngine()
         game.advance(dt: 1.0 / 30, pitch: 0)
         game.advance(dt: 1.0 / 30, pitch: 16)
         XCTAssertGreaterThan(game.height, 0)
         XCTAssertGreaterThan(game.velocity, 0)
 
-        for _ in 0..<180 { game.advance(dt: 1.0 / 120, pitch: 16) }
-        XCTAssertEqual(game.height, 0, accuracy: 0.0001)
+        for _ in 0..<600 { game.advance(dt: 1.0 / 120, pitch: 16) }
+        XCTAssertEqual(game.height, RunnerEngine.manualHoldHeight, accuracy: 0.0001)
         XCTAssertEqual(game.velocity, 0, accuracy: 0.0001)
+        XCTAssertTrue(game.manualing)
+        game.advance(dt: 1.0 / 120, pitch: 0)
+        XCTAssertLessThan(game.height, RunnerEngine.manualHoldHeight)
+        for _ in 0..<120 { game.advance(dt: 1.0 / 120, pitch: 0) }
+        XCTAssertEqual(game.height, 0, accuracy: 0.0001)
+        XCTAssertFalse(game.manualing)
     }
 
     func testNoseManualDucksAndReleases() {

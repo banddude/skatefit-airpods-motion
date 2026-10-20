@@ -5,6 +5,7 @@ let package = Package(name: "SkateFitBridgeChecks",
     products: [.library(name: "SkateFitCore", targets: ["SkateFitCore"])],
     targets: [
         .target(name: "SkateFitCore", path: ".", exclude: [
+            "SharedTests",
             "docs/APPLE_TV.md",
             "SkateMotionTVUITests",
             "SkateMotionTV/PrivacyInfo.xcprivacy",
@@ -102,5 +103,6 @@ let package = Package(name: "SkateFitBridgeChecks",
             "SkateMotionTV/TVGameSession.swift",
 
         ]),
-        .testTarget(name: "TVBridgeTests", dependencies: ["SkateFitCore"], path: "TVBridgeTests")
+        .testTarget(name: "TVBridgeTests", dependencies: ["SkateFitCore"], path: "TVBridgeTests"),
+        .testTarget(name: "RunnerHeldBalanceTests", dependencies: ["SkateFitCore"], path: "SharedTests")
     ])
