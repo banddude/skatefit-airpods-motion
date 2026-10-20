@@ -102,3 +102,16 @@ xcodebuild -project SkateMotion.xcodeproj -scheme SkateMotion -destination 'plat
 - [ ] Approve TestFlight/App Store packaging; do not treat the iPhone Safari installer as a TV installer.
 
 See [Apple TV implementation and deployment runbook](APPLE_TV.md). CI results are recorded per commit; physical checks remain separate.
+
+
+## Continuous manual/nose-manual controls (iPhone 18 / tvOS 2)
+
+- [x] The same shared engine drives held elevation and held duck on iPhone and tvOS.
+- [x] Manual remains elevated beyond the old jump duration without repeated jumps.
+- [x] Level releases elevation; nose manual activates duck immediately and lowers rapidly from the air.
+- [x] Nose manual stays low until released, including on spring ramps.
+- [x] Conflicting controls are neutral; stale sensor input still pauses at the game-session boundary.
+- [x] Shared regression suite covers 30/60/120 Hz equivalence and three-star completion of all 15 courses.
+- [ ] Verify signed iPhone installation and preserved app data on the physical phone.
+- [ ] Pair and install on the selected physical Apple TV using its own tvOS provisioning profile.
+- [ ] Validate real board, Bluetooth and local-network latency after installing both builds.

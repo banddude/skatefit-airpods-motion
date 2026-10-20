@@ -8,17 +8,19 @@ Updated 2026-10-19. Native tvOS target plus an iPhone sensor companion. This is 
 
 The iPhone continues to own the AirPod connection, three-pose calibration, raw motion recording and detailed practice history. The TV displays the live calibrated board quaternion, manual/nose-manual hold time, wobble, sideways tilt, session bests and goal progress. Its Manual Runner shares the existing 15 courses and deterministic engine with the phone build.
 
+Hold a manual to keep the game character elevated. Hold a nose manual to keep it ducked. Returning to neutral releases the hold; nose manual can cancel elevation without waiting for a ballistic landing. Manual lines award balance time while elevated.
+
 Use the Apple TV remote to navigate. The native TV interface is landscape and focus-driven, with a large manual-practice display rather than a scaled iPhone layout. An optional controller/remote game mode runs without the phone, explicitly separate from sensor-based training. A board-controlled run waits for real board tilt and pauses if its sensor link goes stale.
 
 ## Build identities and release status
 
 | Target | Bundle identifier | Candidate version |
 | --- | --- | --- |
-| iPhone companion | com.banddude.skatefit.motionlab | 0.1.0 (17) |
-| Native Apple TV | com.banddude.skatefit.motionlab.tv | 0.1.0 (1) |
+| iPhone companion | com.banddude.skatefit.motionlab | 0.1.0 (18) |
+| Native Apple TV | com.banddude.skatefit.motionlab.tv | 0.1.0 (2) |
 | Local wire protocol | SkateFit TV | 1 |
 
-These are development candidates. **The public iPhone installer remains Beta 16 until build 17 is signed, checked and deliberately deployed.** Beta 16 does not contain the new Apple TV relay. No App Store or TestFlight release is implied by a source build or simulator test. The production SkateFit app and listing remain untouched.
+These are development candidates. **The public iPhone installer remains Beta 16 until build 18 is signed, checked and deliberately deployed.** Beta 16 does not contain the new Apple TV relay. No App Store or TestFlight release is implied by a source build or simulator test. The production SkateFit app and listing remain untouched.
 
 ## Once both new builds are installed
 
