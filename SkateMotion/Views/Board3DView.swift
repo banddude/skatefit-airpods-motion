@@ -62,7 +62,7 @@ struct Board3DView: UIViewRepresentable {
         grip.position = SCNVector3(0, 0.075, 0)
         board.addChildNode(grip)
 
-        let axleMaterial = material(.systemGray2, roughness: 0.5)
+        let axleMaterial = material(BoardScenePalette.axle, roughness: 0.5)
         let wheelMaterial = material(.white, roughness: 0.8)
         let bearingMaterial = material(.darkGray)
 
@@ -93,13 +93,17 @@ struct Board3DView: UIViewRepresentable {
         let ground = SCNNode(geometry: SCNBox(
             width: 5.3, height: 0.025, length: 2.7, chamferRadius: 0))
         ground.geometry?.materials = [material(
-            UIColor.systemGray4.withAlphaComponent(0.18))]
+            BoardScenePalette.ground.withAlphaComponent(0.18))]
         ground.position = SCNVector3(0, -0.68, 0)
         scene.rootNode.addChildNode(ground)
 
         let camera = SCNNode()
         camera.camera = SCNCamera()
+        #if os(tvOS)
+        camera.camera?.fieldOfView = 34
+        #else
         camera.camera?.fieldOfView = 46
+        #endif
         camera.camera?.zNear = 0.1
         camera.camera?.zFar = 100
         camera.position = SCNVector3(4.7, 3.25, 7.4)
@@ -109,7 +113,7 @@ struct Board3DView: UIViewRepresentable {
         let ambient = SCNNode()
         ambient.light = SCNLight()
         ambient.light?.type = .ambient
-        ambient.light?.color = UIColor.systemGray4
+        ambient.light?.color = BoardScenePalette.ground
         ambient.light?.intensity = 650
         scene.rootNode.addChildNode(ambient)
 
@@ -123,6 +127,7 @@ struct Board3DView: UIViewRepresentable {
     }
 }
 
+#if !os(tvOS)
 struct Board3DCard: View {
     let orientation: BoardOrientation?
     let recording: Bool
@@ -189,5 +194,24 @@ struct Board3DCard: View {
         .padding(.vertical, 11)
         .background(Color(uiColor: .tertiarySystemGroupedBackground),
                     in: RoundedRectangle(cornerRadius: 11))
+    }
+}
+
+#endif
+
+private enum BoardScenePalette {
+    static var axle: UIColor {
+        #if os(tvOS)
+        UIColor(white: 0.68, alpha: 1)
+        #else
+        .systemGray2
+        #endif
+    }
+    static var ground: UIColor {
+        #if os(tvOS)
+        UIColor(white: 0.78, alpha: 1)
+        #else
+        .systemGray4
+        #endif
     }
 }

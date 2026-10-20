@@ -1,0 +1,90 @@
+name: Apple platform checks
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [feat/apple-tv-sensor-bridge]
+permissions:
+  contents: read
+concurrency:
+  group: apple-platforms-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  apple:
+    # Standard hosted runners are free for PUBLIC repositories. Never start
+    # a billable private-repo job if this repository's visibility changes.
+    if: github.event.repository.private == false
+    runs-on: macos-15
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [iOS, tvOS]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install project generator
+        run: command -v xcodegen || brew install xcodegen
+      - name: Shared protocol and encrypted companion tests
+        if: matrix.platform == 'tvOS'
+        run: swift test --jobs 3
+      - name: Choose an installed simulator
+        id: simulator
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          xcodebuild -version
+          python3 - <<'PY'
+          import json, os, subprocess
+          def info(*args):
+              return json.loads(subprocess.check_output(['xcrun','simctl',*args,'--json']))
+          platform=os.environ['PLATFORM']
+          runtimes=[r for r in info('list','runtimes')['runtimes']
+                    if r.get('isAvailable') and f'.{platform}-' in r['identifier']]
+          assert runtimes, f'No installed {platform} runtime. Do not report simulator tests as passed.'
+          runtime=max(runtimes,key=lambda r:tuple(int(x) for x in r['version'].split('.')))
+          types=info('list','devicetypes')['devicetypes']
+          prefix='Apple TV 4K' if platform=='tvOS' else 'iPhone 16 Pro'
+          candidates=[d for d in types if d['name'].startswith(prefix)]
+          assert candidates, f'No compatible {platform} device type'
+          udid=subprocess.check_output(['xcrun','simctl','create',f'SkateFit {platform} CI',
+              candidates[-1]['identifier'],runtime['identifier']],text=True).strip()
+          subprocess.check_call(['xcrun','simctl','boot',udid])
+          subprocess.check_call(['xcrun','simctl','bootstatus',udid,'-b'])
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output: output.write(f'udid={udid}\n')
+          print(platform,runtime['name'],udid)
+          PY
+      - name: Build and run platform tests
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          SIMULATOR: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -o pipefail
+          xcodegen generate
+          SCHEME=SkateMotion
+          if [ "$PLATFORM" = "tvOS" ]; then SCHEME=SkateMotionTV; fi
+          xcodebuild -project SkateMotion.xcodeproj -scheme "$SCHEME" \
+            -destination "platform=$PLATFORM Simulator,id=$SIMULATOR" \
+            -derivedDataPath build -resultBundlePath "result-$PLATFORM.xcresult" \
+            -jobs 3 CODE_SIGNING_ALLOWED=NO COMPILER_INDEX_STORE_ENABLE=NO test 2>&1 | tee "tests-$PLATFORM.log"
+      - name: Capture native TV home screen
+        if: always() && matrix.platform == 'tvOS' && steps.simulator.outputs.udid != ''
+        env:
+          SIMULATOR: ${{ steps.simulator.outputs.udid }}
+        run: |
+          mkdir -p screenshots
+          xcrun simctl terminate "$SIMULATOR" com.banddude.skatefit.motionlab.tv || true
+          xcrun simctl launch "$SIMULATOR" com.banddude.skatefit.motionlab.tv
+          sleep 3
+          xcrun simctl io "$SIMULATOR" screenshot screenshots/tvos-home.png
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: skatefit-${{ matrix.platform }}-checks
+          path: |
+            tests-*.log
+            result-*.xcresult
+            screenshots/*.png
+          retention-days: 7

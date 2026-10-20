@@ -1,3 +1,27 @@
+# Continuous balance controls: iPhone build 18 and Apple TV build 2
+
+The shared runner now uses **held controls**, not a one-shot jump. Keep a manual to stay elevated; keep a nose manual to stay ducked. Return the real board to level to release the action. Switching from manual to nose manual immediately activates duck and quickly lowers the game character, rather than waiting for a full jump arc. Both iPhone and native Apple TV use the same implementation.
+
+The elevation is a game mechanic, not a claim that the skateboard is airborne. Actual AirPod signal loss still pauses board-controlled play. A nose-manual hold is not overridden by a launch ramp. The fifteen existing courses remain playable and sustained manual lines still count toward stars.
+
+The Apple TV bridge is included in the new iPhone build. The AirPod remains connected to the iPhone; the native TV app receives calibrated motion over an explicitly paired encrypted local network. No camera. Existing iPhone career and practice data are retained by updating the same prototype bundle.
+
+These are the installation-candidate build identifiers. Device installation and physical pairing must be verified separately; the older public iPhone web installer does not automatically update from a source commit. See [Apple TV setup](docs/APPLE_TV.md).
+
+---
+
+# Native Apple TV candidate + iPhone sensor companion
+
+The new **SkateFit TV** target runs natively on Apple TV with a landscape manual-balance dashboard, full 3D board rotation, the existing 15-course runner, and Siri Remote / gamepad navigation. Your **board-mounted AirPod stays connected to the iPhone**, which shares calibrated motion over an explicitly paired, encrypted local network link. **No camera tracking.**
+
+The candidate versions are **iPhone 0.1.0 (17)** and **tvOS 0.1.0 (1)**. They require both updated apps. This source change is **not a public TV installation or App Store release**. The existing iPhone installer still serves Beta 16 until a new signed companion release is verified and deployed; it is not an Apple TV installer.
+
+Manual practice history and raw motion recordings stay on iPhone. TV game progress is separate. Loss of fresh board data pauses board-controlled play instead of letting stale input advance a score.
+
+See [Apple TV setup, architecture and release checks](docs/APPLE_TV.md). Physical Apple TV installation, local-network pairing and board gameplay remain device acceptance gates.
+
+---
+
 # Beta 16: AirPod controls now drive the Manual Runner game
 
 Registered iPhone beta: https://skatefit-motion-lab.mikejshaffer.workers.dev/install

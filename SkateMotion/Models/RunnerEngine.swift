@@ -33,8 +33,11 @@ import Observation
 
     private var simulationRemainder = 0.0
     private var lastManual = false
-    private var jumpBuffer = 0.0
-    private var coyote = 0.0
+    /// Visual/game altitude only, not the real skateboard's measured height.
+    static let manualHoldHeight = 1.2
+    private static let riseSpeed = 6.6
+    private static let noseDropSpeed = 9.0
+    private static let gravity = 15.0
     private var checkpointScore = 0
     private var checkpointPickups = 0
     private var checkpointDamage = 0
@@ -53,8 +56,8 @@ import Observation
     var nextCue: String {
         guard let action = nextAction else { return "FINISH STRONG" }
         switch action.kind {
-        case .gap, .barrier: return "MANUAL POP"
-        case .overhead, .pulseGate: return "NOSE MANUAL · DUCK"
+        case .gap, .barrier: return "HOLD MANUAL · STAY UP"
+        case .overhead, .pulseGate: return "HOLD NOSE MANUAL · STAY LOW"
         case .manualLine: return "HOLD MANUAL"
         case .noseLine: return "HOLD NOSE MANUAL"
         case .springPad: return "LAUNCH RAMP"
@@ -108,8 +111,6 @@ import Observation
         features = course.features
         simulationRemainder = 0
         lastManual = false
-        jumpBuffer = 0
-        coyote = 0
         checkpointScore = 0
         checkpointPickups = 0
         checkpointDamage = 0
@@ -140,9 +141,7 @@ import Observation
         manualing = false
         combo = checkpointCombo
         lastManual = false
-        jumpBuffer = 0
         simulationRemainder = 0
-        coyote = 0
         invulnerabilityTime = 1.0
         gameOver = false
         won = false
@@ -174,38 +173,49 @@ import Observation
     }
 
     private func advanceStep(dt: Double, input: RunnerInput) {
-        let grounded = height <= 0.001 && velocity <= 0
         elapsed += dt
-        let speed = course.speed
-        distance += speed * dt
+        distance += course.speed * dt
         invulnerabilityTime = max(0, invulnerabilityTime - dt)
-        jumpBuffer = max(0, jumpBuffer - dt)
         flowEnergy = max(0, flowEnergy - dt * 0.025)
-        coyote = grounded ? 0.085 : max(0, coyote - dt)
 
+        // Continuous balance control, identical on iPhone and Apple TV:
+        // manual holds the character UP; nose manual holds it LOW; neutral
+        // releases the action. Conflicting buttons are neutral, never a cheat.
         let holdingManual = input.manual && !input.noseManual
-        crouching = input.noseManual && !holdingManual && grounded
-        manualing = holdingManual && grounded
-        if holdingManual && !lastManual { jumpBuffer = 0.16 }
-        lastManual = holdingManual
+        let holdingNose = input.noseManual && !input.manual
+        let wasManual = lastManual
+        let wasAirborne = height > 0
+        manualing = holdingManual
+        crouching = holdingNose
 
-        // Ground jumps are triggered on an edge, not every frame of a hold.
-        // A small buffer and coyote interval keep touchscreen timing forgiving.
-        if jumpBuffer > 0 && coyote > 0 && !crouching {
-            velocity = 6.6
-            jumpBuffer = 0
-            coyote = 0
-            announce("POP!", kind: "jump")
-        }
-
-        if height > 0 || velocity > 0 {
+        if holdingManual {
+            if !wasManual { announce("MANUAL · HOLD TO STAY UP", kind: "jump") }
+            // No repeated jumps and no timeout. Lift to the clearance height,
+            // then remain there for exactly as long as input stays manual.
+            if height < Self.manualHoldHeight {
+                height = min(Self.manualHoldHeight, height + Self.riseSpeed * dt)
+                velocity = height < Self.manualHoldHeight ? Self.riseSpeed : 0
+            } else if height > Self.manualHoldHeight {
+                // A launch ramp can put us above the normal hold height.
+                height = max(Self.manualHoldHeight, height - Self.riseSpeed * dt)
+                velocity = height > Self.manualHoldHeight ? -Self.riseSpeed : 0
+            } else { velocity = 0 }
+        } else if holdingNose {
+            // Duck takes effect immediately, even during a manual/jump.
+            // Descend quickly rather than waiting through a ballistic arc.
+            height = max(0, height - Self.noseDropSpeed * dt)
+            velocity = height > 0 ? -Self.noseDropSpeed : 0
+        } else if height > 0 || velocity > 0 {
+            // Releasing a manual cancels upward motion immediately. An
+            // independently triggered spring ramp retains its normal arc.
+            if wasManual { velocity = min(0, velocity) }
+            velocity -= Self.gravity * dt
             height = max(0, height + velocity * dt)
-            velocity -= 15.0 * dt
-            if height == 0 {
-                velocity = 0
-                announce("Landed", kind: "land")
-            }
+            if height == 0 { velocity = 0 }
         }
+        lastManual = holdingManual
+        if wasAirborne && height == 0 { announce("Landed", kind: "land") }
+        let grounded = height <= 0.001 && velocity <= 0
 
         let playerRear = distance - 0.31
         let playerFront = distance + 0.31
@@ -229,7 +239,9 @@ import Observation
                     damage(index)
                 }
             case .springPad:
-                if grounded {
+                // A held nose manual always stays low; a ramp must not
+                // override its input. Neutral ramp behavior is preserved.
+                if grounded && !holdingNose && !holdingManual {
                     features[index].resolved = true
                     velocity = 11.7
                     height = 0.02
@@ -238,8 +250,12 @@ import Observation
                 }
             case .manualLine, .noseLine:
                 features[index].exposure += dt
-                let matches = feature.kind == .manualLine ? holdingManual : input.noseManual
-                if grounded && matches {
+                let matches = feature.kind == .manualLine
+                    ? holdingManual && height >= 0.68
+                    : holdingNose && height <= 0.12
+                // Manual lines reward sustained balance while elevated.
+                // Requiring ground contact here would make them unwinnable.
+                if matches {
                     features[index].heldTime += dt
                     flowEnergy = min(1, flowEnergy + dt * 0.80)
                 }

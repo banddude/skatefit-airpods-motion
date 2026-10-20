@@ -35,8 +35,8 @@ struct RunnerInput: Equatable, Codable {
 
     var isActive: Bool { manual || noseManual }
     var label: String {
-        if manual { return "MANUAL / POP" }
-        if noseManual { return "NOSE MANUAL / DUCK" }
+        if manual { return "MANUAL / STAY UP" }
+        if noseManual { return "NOSE MANUAL / STAY LOW" }
         return "BOARD LEVEL"
     }
 }

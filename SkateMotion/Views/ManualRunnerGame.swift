@@ -184,6 +184,16 @@ struct ManualRunnerGame: View {
                     .tracking(3).foregroundStyle(accent)
             }
             Spacer()
+            NavigationLink {
+                TVLinkView(store: store)
+            } label: {
+                Image(systemName: "appletv.fill")
+                    .font(.system(size: 19, weight: .semibold))
+                    .frame(width: 44, height: 44)
+                    .background(soft, in: RoundedRectangle(cornerRadius: 14))
+            }
+            .accessibilityLabel("Connect Apple TV")
+            .accessibilityIdentifier("connectAppleTV")
             Button { page = .settings } label: {
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: 17, weight: .semibold))
@@ -205,7 +215,7 @@ struct ManualRunnerGame: View {
                     .font(.system(size: 35, weight: .black, design: .rounded))
                     .minimumScaleFactor(0.75)
                     .lineLimit(1)
-                Text("Pop gaps with a manual. Duck under beams with a nose manual. Find the perfect run.")
+                Text("Hold a manual to stay above gaps. Hold a nose manual to stay low. Level the board to release.")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.72))
             }
@@ -558,10 +568,10 @@ struct ManualRunnerGame: View {
                     }
                 }.pickerStyle(.segmented)
                 Text(mode == .touch ?
-                     "Touch only: hold MANUAL to pop or NOSE MANUAL to duck. Gamepad A and B also work." :
+                     "Hold MANUAL to stay up, NOSE MANUAL to stay low. Release to return to normal. Gamepad A and B also work." :
                      mode == .automatic ?
                      "Auto uses LIVE AirPods whenever the calibrated sensor is ready before Drop In. Otherwise the game clearly uses touch controls." :
-                     "AirPods only: calibrated nose-up pitch pops, tail-up pitch ducks. The game waits for your first tilt before moving.")
+                     "AirPods only: keep the nose raised to stay up and the tail raised to stay ducked. Level to release. The game waits for your first tilt.")
                     .font(.caption).foregroundStyle(.white.opacity(0.7))
                 if mode != .touch {
                     Label(motionReady ? "AirPod input ready for the next run" :
@@ -585,8 +595,8 @@ struct ManualRunnerGame: View {
                 Text("HOW TO BUILD A PERFECT LINE")
                     .font(.caption2.weight(.black)).tracking(1.4)
                     .foregroundStyle(accent)
-                Text("1  MANUAL pops over street gaps and barriers.")
-                Text("2  NOSE MANUAL ducks under beams and neon gates.")
+                Text("1  Hold MANUAL to stay above street gaps and barriers. Level the board to descend.")
+                Text("2  Hold NOSE MANUAL to stay low under beams and gates. Level the board to release.")
                 Text("3  Hold either balance pose on its matching glowing strip to charge your Flow Meter.")
                 Text("4  Filled Flow doubles your score. Finish clean, grab pickups and hold balance lines to earn all three stars.")
                 Text("5  Green launch ramps automatically give you extra height for the long chasms.")
@@ -743,7 +753,7 @@ struct ManualRunnerGame: View {
                 } else if phase == .active {
                     HStack {
                         Image(systemName: "airpodspro")
-                        Text("Real board pitch controls manual pop and nose-manual duck")
+                        Text("Hold a manual to stay up. Hold a nose manual to stay ducked.")
                     }
                     .font(.caption).foregroundStyle(accent)
                     .frame(maxWidth: .infinity).padding(20).panel()
@@ -822,7 +832,7 @@ struct ManualRunnerGame: View {
                                          ? accent : .orange)
                 }
             }
-            Text("Lift nose to pop, tail for nose-manual duck. " +
+            Text("Hold nose up to stay elevated, tail up to stay low. " +
                  "Tilts over " + String(format: "%.0f°", activationDegrees) +
                  " trigger controls; the 3D preview follows the actual board quaternion.")
                 .font(.caption2)
@@ -869,7 +879,7 @@ struct ManualRunnerGame: View {
 
     private var touchPads: some View {
         HStack(spacing: 12) {
-            actionPad("MANUAL", detail: "POP / BALANCE", symbol: "arrow.up.right",
+            actionPad("MANUAL", detail: "HOLD TO STAY UP", symbol: "arrow.up.right",
                       active: manualHeld, color: accent)
                 .gesture(DragGesture(minimumDistance: 0)
                     .onChanged { _ in
@@ -878,15 +888,15 @@ struct ManualRunnerGame: View {
                     }
                     .onEnded { _ in manualHeld = false })
                 .accessibilityAction { queuedManual = true }
-                .accessibilityLabel("Manual jump. Hold to balance.")
+                .accessibilityLabel("Manual. Hold to stay elevated; release to descend.")
                 .accessibilityAddTraits(.isButton)
-            actionPad("NOSE MANUAL", detail: "DUCK / BALANCE", symbol: "arrow.down.right",
+            actionPad("NOSE MANUAL", detail: "HOLD TO STAY LOW", symbol: "arrow.down.right",
                       active: noseHeld, color: .cyan)
                 .gesture(DragGesture(minimumDistance: 0)
                     .onChanged { _ in noseHeld = true }
                     .onEnded { _ in noseHeld = false })
                 .accessibilityAction { accessibleNoseRemaining = 1.1 }
-                .accessibilityLabel("Nose manual. Hold to duck.")
+                .accessibilityLabel("Nose manual. Hold to stay low; release to stand.")
                 .accessibilityAddTraits(.isButton)
         }
         .frame(height: 106)

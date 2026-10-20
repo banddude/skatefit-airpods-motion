@@ -52,6 +52,18 @@ final class RunnerUITests: XCTestCase {
         XCTAssertTrue(app.buttons["openManualBalanceCoach"].waitForExistence(timeout: 7))
     }
 
+    func testAppleTVCompanionDoesNotDiscoverUntilAsked() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let tv = app.buttons["connectAppleTV"]
+        XCTAssertTrue(tv.waitForExistence(timeout: 15))
+        tv.tap()
+        XCTAssertTrue(app.staticTexts["SKATEFIT ON APPLE TV"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["findAppleTV"].exists)
+        XCTAssertTrue(app.staticTexts["TV sharing off"].exists)
+        XCTAssertFalse(app.buttons["disconnectTV"].exists)
+    }
+
     func testDropInPauseResumeAndExit() throws {
         let app = XCUIApplication()
         app.launch()

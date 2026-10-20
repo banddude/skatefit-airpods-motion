@@ -25,3 +25,8 @@ This is an inventory, not a substitute for legal review.
 ## Beta 15 sensor-only assets
 
 The camera marker, printer PDF and camera modules were removed. The 3D board is original SceneKit geometry, not an external licensed model.
+
+
+## Native tvOS candidate branding
+
+The layered tvOS home-screen icon, App Store icon and Top Shelf image are resized/composited versions of the existing repository SkateFit icon. No new external artwork or font files are bundled. The existing icon's commercial provenance still requires the same pre-release rights check stated above. The TV game and board use the shared original Canvas and SceneKit geometry.

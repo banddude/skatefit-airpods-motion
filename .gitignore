@@ -22,3 +22,5 @@ captures/
 *.csr
 *.key
 *.pem
+
+.build/

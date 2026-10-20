@@ -198,7 +198,7 @@ struct RunnerSceneView: View {
                 if let pitch = livePitchDegrees, pitch.isFinite {
                     return -CGFloat(max(-32, min(32, pitch))) * 0.65
                 }
-                return engine.manualing && engine.height < 0.2 ? -7 : 0
+                return engine.manualing ? -7 : engine.crouching ? 5 : 0
             }()
             let deckPath = Path { path in
                 path.move(to: CGPoint(x: playerX - 21, y: deckY + 6))
