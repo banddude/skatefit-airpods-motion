@@ -128,6 +128,8 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
     private var lastHeadphoneReadingAt: TimeInterval?
     private var monitorTask: Task<Void, Never>?
     private var lastHeadphoneStreamStart: TimeInterval?
+    private var headphoneStreamEpoch = 0
+    private var headphoneStreamAttempts = 0
     private var lastUIUpdate = 0.0
     private var lastGamePitchUpdate = 0.0
     private var lastGamePitchAt: TimeInterval?
@@ -208,7 +210,10 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         refreshAudioOutput()
         NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
             .sink { [weak self] _ in
-                Task { @MainActor [weak self] in self?.refreshAudioOutput() }
+                Task { @MainActor [weak self] in
+                    self?.refreshAudioOutput()
+                    if self?.isRecording == true { self?.ensureHeadphoneStream() }
+                }
             }
             .store(in: &subscriptions)
         cloud.$status.sink { [weak self] in self?.cloudStatus = $0 }
@@ -264,6 +269,10 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
                 guard let self, self.isRecording else { return }
                 let now = ProcessInfo.processInfo.systemUptime
                 self.publishBoardHealth(now: now)
+                if !HeadphoneStreamHealth.hasLiveSamples(
+                    lastSampleAt: self.lastHeadphoneReadingAt, now: now) {
+                    self.headphoneStreamActive = false
+                }
                 if !self.sensorQuality.snapshot.isFresh(now: now) {
                     self.tracker.interrupt()
                     self.balance = self.tracker.snapshot
@@ -286,8 +295,10 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         guard isRecording else { return }
         monitorTask?.cancel()
         monitorTask = nil
+        headphoneStreamEpoch += 1
         headphone.stopDeviceMotionUpdates()
         headphone.stopConnectionStatusUpdates()
+        headphoneStreamActive = false
         phone.stopDeviceMotionUpdates()
         isRecording = false
         UIApplication.shared.isIdleTimerDisabled = false
@@ -385,17 +396,23 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         }
         refreshAudioOutput()
         // Only restart the stream if no active board data has arrived.
-        if isRecording, headphoneTotalSamples == 0 { ensureHeadphoneStream() }
+        if isRecording && !HeadphoneStreamHealth.hasLiveSamples(
+            lastSampleAt: lastHeadphoneReadingAt,
+            now: ProcessInfo.processInfo.systemUptime) {
+            // The user explicitly requested a wake tone. Retry once afterward
+            // without waiting for the scheduled exponential-backoff interval.
+            ensureHeadphoneStream(force: true)
+        }
     }
 
     func retryHeadphones() {
         updateHeadphonePermission()
+        headphoneStreamEpoch += 1
         headphone.stopDeviceMotionUpdates()
         headphoneStreamActive = false
-        lastHeadphoneStreamStart = nil
         headphone.startConnectionStatusUpdates()
-        ensureHeadphoneStream()
-        status = "Retrying AirPods motion. Open the AirPods Bluetooth settings if the sensor stays unavailable."
+        ensureHeadphoneStream(force: true)
+        status = "AirPod retry requested. Check the iPhone audio route, then watch for real motion readings."
     }
 
     private func updateHeadphonePermission() {
@@ -408,39 +425,69 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         }
     }
 
-    private func ensureHeadphoneStream() {
+    private func ensureHeadphoneStream(force: Bool = false) {
         guard isRecording, !isSyntheticDemo else { return }
         updateHeadphonePermission()
         let now = ProcessInfo.processInfo.systemUptime
+
+        switch CMHeadphoneMotionManager.authorizationStatus() {
+        case .denied:
+            headphoneStreamActive = false
+            headphoneStatus = "AirPod motion permission denied. Enable Motion & Fitness for SkateFit in iPhone Settings."
+            return
+        case .restricted:
+            headphoneStreamActive = false
+            headphoneStatus = "AirPod motion permission is restricted in iPhone settings."
+            return
+        default: break
+        }
+
         if !headphone.isDeviceMotionAvailable {
             headphoneStreamActive = false
-            headphoneStatus = "AirPods motion unavailable. Your phone can upload data, but calibration needs the board AirPod."
+            headphoneStatus = "No AirPod motion device available to this iPhone. Reconnect AirPods to the iPhone, not the Apple TV."
             return
         }
-        let stale = lastHeadphoneReadingAt.map { now - $0 > 8 }
-            ?? (lastHeadphoneStreamStart.map { now - $0 > 8 } ?? false)
-        if headphone.isDeviceMotionActive && !stale {
-            headphoneStreamActive = true
-            if lastHeadphoneReadingAt == nil {
-                headphoneStatus = "AirPods sensor opened, but no readings. Set the mounted AirPod as Microphone, turn off Automatic Ear Detection, and play a brief wake tone through AirPods."
+
+        let live = HeadphoneStreamHealth.hasLiveSamples(
+            lastSampleAt: lastHeadphoneReadingAt, now: now)
+        // Keep "motion stream active" false until a real reading arrives,
+        // even when the CoreMotion manager reports that updates have started.
+        headphoneStreamActive = headphone.isDeviceMotionActive && live
+
+        if !force && !HeadphoneStreamHealth.shouldRestart(
+            managerActive: headphone.isDeviceMotionActive,
+            lastSampleAt: lastHeadphoneReadingAt,
+            lastAttemptAt: lastHeadphoneStreamStart,
+            attempts: headphoneStreamAttempts,
+            now: now) {
+            if !live {
+                headphoneStatus = headphone.isDeviceMotionActive
+                    ? "AirPods motion was requested but no fresh sensor readings arrived. Check the iPhone Bluetooth/audio route, then tap Wake AirPod."
+                    : "Waiting to retry the AirPod sensor. Check that AirPods are connected to this iPhone."
             }
             return
         }
+
         if headphone.isDeviceMotionActive { headphone.stopDeviceMotionUpdates() }
+        headphoneStreamEpoch += 1
+        let epoch = headphoneStreamEpoch
+        headphoneStreamAttempts += 1
         lastHeadphoneStreamStart = now
         headphoneStreamActive = false
-        headphoneStatus = "Connecting to AirPods motion stream..."
+        headphoneStatus = "Requesting AirPod motion updates on iPhone (attempt \(headphoneStreamAttempts))..."
         headphone.startDeviceMotionUpdates(to: queue) { [weak self] motion, error in
-            let uptime = ProcessInfo.processInfo.systemUptime
+            let receivedAt = ProcessInfo.processInfo.systemUptime
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, self.isRecording,
+                      self.headphoneStreamEpoch == epoch else { return }
                 if let error {
-                    self.headphoneStatus = "AirPods sensor error: \(error.localizedDescription)"
+                    self.headphoneStreamActive = false
+                    self.headphoneStatus = "AirPods motion error: \(error.localizedDescription). Check iPhone Bluetooth and permission."
                     self.updateHeadphonePermission()
                     return
                 }
                 guard let motion else { return }
-                self.receive(MotionSample(motion: motion, source: .headphone, receivedAt: uptime))
+                self.receive(MotionSample(motion: motion, source: .headphone, receivedAt: receivedAt))
             }
         }
     }
@@ -469,6 +516,8 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
 
     nonisolated func headphoneMotionManagerDidDisconnect(_ manager: CMHeadphoneMotionManager) {
         Task { @MainActor [weak self] in
+            self?.headphoneStreamEpoch += 1
+            self?.headphone.stopDeviceMotionUpdates()
             self?.headphoneStreamActive = false
             self?.tracker.interrupt()
             if let self {
@@ -536,6 +585,12 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         // Record all sources for diagnostics, but never classify the ear-worn
         // or incorrectly selected AirPod as movement from the skateboard.
         if sample.source == .headphone {
+            if !HeadphoneStreamHealth.hasLiveSamples(
+                lastSampleAt: lastHeadphoneReadingAt, now: sample.hostUptime) {
+                // A stream has recovered. Reset its backoff without dropping
+                // the current session, stored calibration, or TV pairing.
+                headphoneStreamAttempts = 0
+            }
             headphoneTotalSamples += 1
             lastHeadphoneReadingAt = sample.hostUptime
             headphoneDetectedSide = sample.sensorLocation
@@ -562,6 +617,9 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         if sample.source == .headphone && sample.sensorLocation != boardSide.rawValue {
             _ = sensorQuality.accept(sample, expectedSide: boardSide.rawValue)
             rejectedHeadphoneCount += 1
+            if sample.sensorLocation == "default" {
+                headphoneStatus = "AirPods report an unidentified sensor side. SkateFit will not guess which earbud is on the board."
+            }
             saveSample(sample, isBoard: false, orientation: nil)
             if sample.hostUptime - lastUIUpdate > 0.5 {
                 status = "Motion source is \(sample.sensorLocation), but \(boardSide.rawValue) is mounted. Ignoring for classification."
@@ -695,6 +753,10 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
         lastQualityPublication = 0
         headphoneTotalSamples = 0
         lastHeadphoneReadingAt = nil
+        lastHeadphoneStreamStart = nil
+        headphoneStreamAttempts = 0
+        headphoneStreamEpoch += 1
+        headphoneStreamActive = false
         headphoneDetectedSide = "none"
         calibrationRequestedAt = nil
         calibrationLastSampleTime = nil

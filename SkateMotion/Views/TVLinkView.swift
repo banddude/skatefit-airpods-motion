@@ -16,7 +16,7 @@ struct TVLinkView: View {
             VStack(alignment: .leading, spacing: 20) {
                 Label("SKATEFIT ON APPLE TV", systemImage: "appletv.fill")
                     .font(.title2.weight(.black))
-                Text("Your iPhone receives the board AirPod. Apple TV runs the game and shows your balance. No camera or internet service is involved in this link.")
+                Text("Your AirPod must stay connected to this iPhone, not the TV. The iPhone receives motion; Apple TV runs the game. No camera or internet service is involved.")
                     .font(.subheadline)
                 Text("1. Open SkateFit on Apple TV and select Pair iPhone.\n2. Keep both devices on the same local network.\n3. Find the TV here and enter its code.")
                     .font(.subheadline)
@@ -31,7 +31,7 @@ struct TVLinkView: View {
                           systemImage: store.gameMotionReady ? "airpodspro" : "scope")
                     Text("\(sender.framesSent) responses sent over the encrypted local link")
                         .font(.caption.monospacedDigit())
-                    Text("Keep SkateFit open on this iPhone. You may return to calibration or manual practice without disconnecting. Locking the phone or switching apps ends TV sharing and pauses board-controlled play.")
+                    Text("Keep SkateFit open on this iPhone. Watch Motion Lab's AirPod readings. If the count stops increasing, reconnect the AirPods to the iPhone, not Apple TV. Locking or switching away pauses TV sharing.")
                         .font(.caption)
                     Button("Disconnect Apple TV", role: .destructive) { sender.stop() }
                         .buttonStyle(.bordered)
