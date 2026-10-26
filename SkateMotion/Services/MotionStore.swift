@@ -509,8 +509,16 @@ final class MotionStore: NSObject, ObservableObject, CMHeadphoneMotionManagerDel
 
     nonisolated func headphoneMotionManagerDidConnect(_ manager: CMHeadphoneMotionManager) {
         Task { @MainActor [weak self] in
-            self?.headphoneStatus = "Headphones connected; checking motion..."
-            self?.ensureHeadphoneStream()
+            guard let self else { return }
+            self.headphoneStatus = "AirPods connected to iPhone; checking for actual motion readings..."
+            guard self.isRecording else { return }
+            let now = ProcessInfo.processInfo.systemUptime
+            if !HeadphoneStreamHealth.hasLiveSamples(
+                lastSampleAt: self.lastHeadphoneReadingAt, now: now) {
+                // A real reconnect can bypass backoff once; polling still
+                // enforces 8/16/32 second delays without link events.
+                self.ensureHeadphoneStream(force: true)
+            }
         }
     }
 
