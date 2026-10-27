@@ -1,6 +1,6 @@
 # SkateFit Motion Lab beta distribution
 
-The beta is a separate iPhone app with bundle identifier `com.banddude.skatefit.motionlab`, version `0.1.0`, build `16`. It does **not** modify the production SkateFit app.
+The beta is a separate iPhone app with bundle identifier `com.banddude.skatefit.motionlab`, version `0.1.0`, build `19`. It does **not** modify the production SkateFit app.
 
 **Direct-install page:** https://skatefit-motion-lab.mikejshaffer.workers.dev/install
 
@@ -65,14 +65,14 @@ Verify the exported IPA by extracting it, checking that `codesign --verify --dee
 
 ```bash
 wrangler r2 object put \
-  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-16.ipa \
+  skatefit-motion-betas/ios/SkateFitMotionLab-0.1.0-19.ipa \
   --file /tmp/skatefit-motion-beta-export/SkateMotion.ipa \
   --remote --content-type application/octet-stream
 
 wrangler deploy
 ```
 
-The command above is illustrative only. The object key, manifest metadata, installer text and IPA version must all match the current build. Build 16 uses \`ios/SkateFitMotionLab-0.1.0-16.ipa\`. Never change the Worker installer to a build unless the new IPA object has been uploaded and its checksum verified.
+The command above is illustrative only. The object key, manifest metadata, installer text and IPA version must all match the current build. Build 16 uses \`ios/SkateFitMotionLab-0.1.0-19.ipa\`. Never change the Worker installer to a build unless the new IPA object has been uploaded and its checksum verified.
 
 ## TestFlight transition
 
@@ -251,3 +251,11 @@ Yaw is relative to flat calibration and may drift over time.
 - The 3D board and game's skateboard follow real board tilt. Input pitch, roll, state and sample rate are visible.
 - A disconnected stream pauses the run. Reconnect AirPods or explicitly choose Touch.
 - Existing saved career, training history, no-camera policy and default-off cloud telemetry are preserved.
+
+
+## Build 19 AirPod recovery delivery
+
+- Build 19 is an in-place update for the existing prototype bundle com.banddude.skatefit.motionlab, not a new production app. It updates motion readiness, bounded reconnect policy, diagnostic copy and sensor-source selection feedback.
+- Do not publish the Worker installer until the signed IPA, enrolled device profile, manifest and R2 object hash are verified. Existing user session files remain in the same app container across an in-place upgrade.
+- A Safari-installed build still needs a real connected AirPod to validate off-ear motion. This release cannot fix Bluetooth hardware that delivers no Core Motion frames.
+- Apple TV game build 2 does not need reinstalling for this iPhone-only repair; it continues to receive paired encrypted iPhone motion data.
