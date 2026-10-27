@@ -122,7 +122,7 @@ struct ContentView: View {
                     .font(.headline)
                 Text(store.boardSensorReady ?
                      "AirPod motion is coming through" :
-                     (store.isRecording ? "Connect your AirPod to begin" :
+                     (store.isRecording ? store.headphoneStatus :
                       "Start a session to connect"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -172,7 +172,7 @@ struct ContentView: View {
             .tint(store.isRecording ? .red : .teal)
 
             if store.isRecording {
-                Label("Recording on your iPhone · syncs over cellular",
+                Label("Recording locally on iPhone · TV link is separate",
                       systemImage: "circle.fill")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -354,13 +354,17 @@ struct ContentView: View {
                                rate.x, rate.y, rate.z))
                 }
                 LabeledContent("AirPod readings", value: "\(store.headphoneTotalSamples)")
+                LabeledContent("Actual sensor stream", value: store.headphoneStreamActive ? "Live" : "No live readings")
+                LabeledContent("Detected AirPod side", value: store.headphoneDetectedSide)
+                LabeledContent("Selected board AirPod", value: store.boardSide.title)
+                Text("If AirPod readings increase but board readings stay at zero, the sensor side is not matching the selected board AirPod. Stop the session and correct the selected side in Advanced.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 LabeledContent("Board readings", value: "\(store.boardSampleCount)")
                 LabeledContent("Phone readings", value: "\(store.phoneSampleCount)")
                 LabeledContent("Other AirPod", value: "\(store.rejectedHeadphoneCount)")
                 LabeledContent("Motion permission", value: store.headphonePermission)
                 LabeledContent("Sensor available", value: store.headphoneAvailable ? "Yes" : "No")
-                LabeledContent("Sensor stream active", value: store.headphoneStreamActive ? "Yes" : "No")
-                LabeledContent("Detected side", value: store.headphoneDetectedSide)
                 Text(store.headphoneStatus)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -432,9 +436,12 @@ struct ContentView: View {
                       systemImage: store.boardSensorReady ? "checkmark.circle.fill" : "airpodspro")
                     .font(.headline)
                     .foregroundStyle(store.boardSensorReady ? Color.green : Color.orange)
-                Text("Tape one AirPod securely to the board. Keep the other in its case. Turn off Automatic Ear Detection and choose the mounted AirPod as the microphone in your iPhone's Bluetooth settings.")
+                Text("The AirPod must be connected to THIS iPhone, not the Apple TV. Keep the other earbud in its case. Turn off Automatic Ear Detection, select the mounted earbud as microphone, and keep SkateFit open.")
                     .font(.subheadline)
 
+                Text("Bluetooth showing Connected does not mean Core Motion is sending samples. The only proof is a rising AirPod readings count. If Apple TV suggests connecting the AirPods, decline or select iPhone again.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Audio output")
@@ -451,7 +458,7 @@ struct ContentView: View {
                 Button {
                     store.wakeAirPods()
                 } label: {
-                    Label("Wake AirPod", systemImage: "speaker.wave.2.fill")
+                    Label("Wake & Retry AirPod Motion", systemImage: "speaker.wave.2.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -466,6 +473,13 @@ struct ContentView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 LabeledContent("AirPod readings", value: "\(store.headphoneTotalSamples)")
+                LabeledContent("Board readings", value: "\(store.boardSampleCount)")
+                LabeledContent("Motion stream", value: store.headphoneStreamActive ? "Receiving live samples" : "No live samples")
+                LabeledContent("Detected side", value: store.headphoneDetectedSide)
+                LabeledContent("Selected side", value: store.boardSide.title)
+                Text("If AirPod readings rise but board readings stay at zero, stop the recording and change Board-mounted AirPod in Advanced. Then start again.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }

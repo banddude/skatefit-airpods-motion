@@ -1,3 +1,13 @@
+# Beta 19 iPhone candidate: AirPod connection reliability
+
+Build 19 corrects the sensor connection status and recovery policy while preserving the same AirPod-only Manual Balance Coach, continuous-hold Runner, and optional paired Apple TV link. A Core Motion request no longer masquerades as a live sensor stream. Reconnect cycles use bounded delays, ignore old callbacks, and give immediate user-triggered retry when needed. Motion Lab displays AirPod readings versus accepted board readings and their detected/selected side, so connection problems are diagnosable rather than silently labeled Ready.
+
+**Hardware behavior remains to be checked.** Bluetooth audio connectivity cannot guarantee off-ear AirPod head-motion updates; this app never fabricates a sensor stream. Full iOS simulator tests, a signed iPhone build, and preservation of saved user data must be verified before installation. This beta is not a public App Store release.
+
+[Connection troubleshooting](docs/AIRPOD_CONNECTION_TROUBLESHOOTING.md)
+
+---
+
 # Continuous balance controls: iPhone build 18 and Apple TV build 2
 
 The shared runner now uses **held controls**, not a one-shot jump. Keep a manual to stay elevated; keep a nose manual to stay ducked. Return the real board to level to release the action. Switching from manual to nose manual immediately activates duck and quickly lowers the game character, rather than waiting for a full jump arc. Both iPhone and native Apple TV use the same implementation.

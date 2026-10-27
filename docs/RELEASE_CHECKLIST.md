@@ -115,3 +115,15 @@ See [Apple TV implementation and deployment runbook](APPLE_TV.md). CI results ar
 - [ ] Verify signed iPhone installation and preserved app data on the physical phone.
 - [ ] Pair and install on the selected physical Apple TV using its own tvOS provisioning profile.
 - [ ] Validate real board, Bluetooth and local-network latency after installing both builds.
+
+
+## Beta 19 iPhone: actual AirPod stream status and recovery
+
+- [x] Only recent delivered headphone frames mark the stream live, never Core Motion's active flag alone.
+- [x] Bound scheduled restart attempts, accept user Retry, and discard callbacks from obsolete streams.
+- [x] Show headphone/board sample counts and selected sensor side with explicit iPhone-vs-TV guidance.
+- [x] No camera features, cloud upload toggle changes, or deletion of saved sessions.
+- [ ] Pass full iOS unit and UI tests on Xcode.
+- [ ] Produce a signed, device-enrolled iPhone build 19.
+- [ ] Confirm prior iPhone app data backup and preservation after installation.
+- [ ] Confirm on real AirPod that live samples increase and survive dropouts/reconnections.
