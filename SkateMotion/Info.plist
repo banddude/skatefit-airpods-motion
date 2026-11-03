@@ -20,21 +20,21 @@
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
 	<string>18</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_skatefit._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Connect this iPhone to your Apple TV to share board motion on your local network. No camera or internet server is used.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Optionally show outdoor travel speed from this iPhone during manual practice. No GPS coordinates are stored or uploaded.</string>
+	<string>Optional outdoor speed from this iPhone while practicing. GPS coordinates are not saved or uploaded.</string>
 	<key>NSMotionUsageDescription</key>
-	<string>SkateFit Motion Lab records iPhone and AirPods motion to research skateboard tricks, manuals, and landings.</string>
+	<string>SkateFit records board-mounted AirPod orientation and motion to coach manual balance and research skateboard movement.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-	</array>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Connect to your Apple TV to share board motion over an encrypted local network link. No camera is used.</string>
-	<key>NSBonjourServices</key>
-	<array>
-		<string>_skatefit._tcp</string>
 	</array>
 </dict>
 </plist>
